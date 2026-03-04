@@ -1,0 +1,192 @@
+---
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'An AI-focused engineering blog' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <Header />
+    <main>
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --color-bg: #fff;
+    --color-text: #000;
+    --color-muted: #666;
+    --color-border: #e5e5e5;
+    --color-accent: #000;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-body: 'Open Sans', sans-serif;
+    --max-width: 800px;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 2rem;
+    --spacing-xl: 4rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-bg: #0a0a0a;
+      --color-text: #fff;
+      --color-muted: #999;
+      --color-border: #2a2a2a;
+      --color-accent: #fff;
+    }
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.7;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: var(--spacing-xl) var(--spacing-lg);
+  }
+
+  a {
+    color: var(--color-text);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+
+  a:hover {
+    border-bottom-color: var(--color-text);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    line-height: 1.1;
+  }
+
+  p {
+    margin-bottom: var(--spacing-md);
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: var(--spacing-lg) 0;
+  }
+
+  /* Code blocks */
+  pre {
+    background: #0d1117 !important;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: var(--spacing-md);
+    overflow-x: auto;
+    margin: var(--spacing-lg) 0;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  code:not(pre code) {
+    background: var(--color-border);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    font-size: 0.875em;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    code:not(pre code) {
+      background: #1a1a1a;
+    }
+  }
+
+  /* Prose styles for blog posts */
+  .prose h2 {
+    font-size: 2rem;
+    margin: var(--spacing-xl) 0 var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .prose h3 {
+    font-size: 1.5rem;
+    margin: var(--spacing-lg) 0 var(--spacing-sm);
+  }
+
+  .prose ul, .prose ol {
+    padding-left: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .prose li {
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .prose blockquote {
+    border-left: 3px solid var(--color-border);
+    padding-left: var(--spacing-md);
+    color: var(--color-muted);
+    font-style: italic;
+    margin: var(--spacing-lg) 0;
+  }
+
+  .prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--spacing-lg) 0;
+    font-size: 0.9rem;
+  }
+
+  .prose th, .prose td {
+    border: 1px solid var(--color-border);
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: left;
+  }
+
+  .prose th {
+    background: var(--color-border);
+    font-weight: 600;
+  }
+</style>

@@ -1,0 +1,182 @@
+---
+title: Building AI Agents with the Claude API
+description: A practical guide to building autonomous AI agents using Claude's tool use and streaming capabilities — from a single function call to a multi-step reasoning loop.
+pubDate: 2025-11-15
+tags: [Claude, Agents, Tool Use, TypeScript]
+---
+
+Agents are programs that can reason, decide, and act. With Claude's tool use API, you can build agents that call external functions, evaluate results, and keep going until the job is done. Here's how.
+
+## The Core Loop
+
+Every agent, no matter how complex, shares the same basic loop:
+
+1. Send a message to the model
+2. Check if the model wants to call a tool
+3. Execute the tool, append the result
+4. Repeat until no more tool calls — return the final text
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic();
+
+type Tool = {
+  name: string;
+  description: string;
+  input_schema: object;
+  fn: (input: Record<string, unknown>) => Promise<unknown>;
+};
+
+async function runAgent(userMessage: string, tools: Tool[]) {
+  const messages: Anthropic.MessageParam[] = [
+    { role: "user", content: userMessage },
+  ];
+
+  const toolDefinitions = tools.map(({ name, description, input_schema }) => ({
+    name,
+    description,
+    input_schema,
+  }));
+
+  while (true) {
+    const response = await client.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 4096,
+      tools: toolDefinitions,
+      messages,
+    });
+
+    // Append assistant response
+    messages.push({ role: "assistant", content: response.content });
+
+    if (response.stop_reason === "end_turn") {
+      const textBlock = response.content.find((b) => b.type === "text");
+      return textBlock?.type === "text" ? textBlock.text : "";
+    }
+
+    if (response.stop_reason !== "tool_use") break;
+
+    // Process tool calls
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+    for (const block of response.content) {
+      if (block.type !== "tool_use") continue;
+
+      const tool = tools.find((t) => t.name === block.name);
+      if (!tool) {
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: "Tool not found",
+          is_error: true,
+        });
+        continue;
+      }
+
+      try {
+        const result = await tool.fn(block.input as Record<string, unknown>);
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(result),
+        });
+      } catch (err) {
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: String(err),
+          is_error: true,
+        });
+      }
+    }
+
+    messages.push({ role: "user", content: toolResults });
+  }
+}
+```
+
+## Defining Tools
+
+Tools are just typed function definitions. Claude decides when to call them — your job is to describe them clearly.
+
+```typescript
+const searchTool: Tool = {
+  name: "web_search",
+  description:
+    "Search the web for current information. Use this when you need up-to-date facts, recent events, or specific data not in your training.",
+  input_schema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "The search query",
+      },
+    },
+    required: ["query"],
+  },
+  fn: async ({ query }) => {
+    // Wire up to your search API of choice
+    const results = await fetchSearchResults(query as string);
+    return results.slice(0, 5).map((r) => ({
+      title: r.title,
+      snippet: r.snippet,
+      url: r.url,
+    }));
+  },
+};
+```
+
+## Streaming with Tool Use
+
+For long-running tasks, streaming keeps the UI responsive. The pattern is slightly different — you accumulate the stream, then handle tool use once the stream is done.
+
+```typescript
+async function streamingAgent(userMessage: string) {
+  const messages: Anthropic.MessageParam[] = [
+    { role: "user", content: userMessage },
+  ];
+
+  while (true) {
+    const stream = client.messages.stream({
+      model: "claude-opus-4-6",
+      max_tokens: 4096,
+      tools: toolDefinitions,
+      messages,
+    });
+
+    // Stream text chunks as they arrive
+    stream.on("text", (text) => process.stdout.write(text));
+
+    const response = await stream.finalMessage();
+    messages.push({ role: "assistant", content: response.content });
+
+    if (response.stop_reason === "end_turn") break;
+    if (response.stop_reason !== "tool_use") break;
+
+    // Handle tool calls (same as above)
+    const toolResults = await processToolCalls(response.content);
+    messages.push({ role: "user", content: toolResults });
+  }
+}
+```
+
+## Putting It Together
+
+```typescript
+const agent = await runAgent(
+  "Research the top 3 open-source LLM frameworks in 2025 and compare their GitHub stars, license, and primary use case.",
+  [searchTool, readUrlTool]
+);
+
+console.log(agent);
+```
+
+The model will search, read, synthesize — and give you a structured answer without you writing any orchestration logic.
+
+## Key Takeaways
+
+- **The loop is the agent** — most agent frameworks are just this loop with extra scaffolding
+- **Tool descriptions are prompts** — be specific about when the tool should and shouldn't be used
+- **Append, don't replace** — always push assistant responses and tool results into the messages array before the next turn
+- **Timeouts matter** — set reasonable deadlines; a runaway agent will burn through your API budget fast

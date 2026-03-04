@@ -1,0 +1,71 @@
+---
+title: OpenAI Assistants API — From Zero to Working Bot
+description: The Assistants API brings persistent threads, file search, and code interpreter to OpenAI's models. Here's a quickstart with an interactive sandbox to explore the key concepts.
+pubDate: 2025-08-14
+tags: [OpenAI, Assistants, API, JavaScript]
+codesandbox: https://codesandbox.io/embed/openai-assistants-quickstart-v2-m7p3r?fontsize=14&hidenavigation=1&theme=dark&view=editor
+---
+
+OpenAI's Assistants API is a stateful layer on top of the Chat Completions API. Instead of managing message history yourself, you create persistent **Threads** and let OpenAI handle the state. The model can also run built-in tools — code interpreter and file search — without any extra infrastructure.
+
+## Core Concepts
+
+### Assistants
+
+An Assistant is a configured model instance: system prompt, tools enabled, model choice. Create it once, reuse it forever.
+
+### Threads
+
+A Thread is a conversation history. Add messages, run the assistant against it, and the API handles token management and context window packing automatically.
+
+### Runs
+
+A Run is a single execution — "take this thread, apply this assistant, produce a response." You poll the Run until it completes (or stream for real-time output).
+
+### Steps and Tool Calls
+
+Runs are composed of Steps. If the assistant calls a tool (like code interpreter), you see a `tool_calls` step before the final `message_creation` step. This lets you observe exactly what the model did.
+
+## The Basic Flow
+
+```
+Create Assistant → Create Thread → Add Message → Create Run → Poll → Read Response
+```
+
+Each step maps to one API call. The sandbox below shows the full lifecycle with a working JavaScript implementation you can run directly.
+
+## File Search
+
+The built-in file search tool lets your assistant query uploaded documents using vector search — similar to RAG, but fully managed.
+
+Key points:
+- Supports PDF, DOCX, TXT, and 20+ other formats
+- Automatic chunking and embedding — no configuration needed
+- Files can be attached at the Assistant level (always available) or Thread level (per-conversation)
+- Pricing is based on storage + retrieval, not embedding calls
+
+## Code Interpreter
+
+Code interpreter runs Python in a sandboxed environment. The model can:
+- Generate and execute code to answer quantitative questions
+- Parse uploaded files (CSV, JSON, Excel)
+- Generate charts and return them as image files
+- Iterate on code if the first attempt fails
+
+This is especially powerful for data analysis tasks — "here's a CSV of sales data, chart the top 5 products by revenue" works out of the box.
+
+## Streaming
+
+Polling is fine for demos but awkward in production. The streaming API emits Server-Sent Events as the run progresses:
+
+| Event | When |
+|-------|------|
+| `thread.run.created` | Run starts |
+| `thread.run.step.created` | Each step begins |
+| `thread.message.delta` | Text tokens stream in |
+| `thread.message.completed` | Final message ready |
+| `thread.run.completed` | Run is done |
+
+The sandbox includes a streaming example you can toggle on to see the difference.
+
+## Interactive Demo

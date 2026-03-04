@@ -1,0 +1,98 @@
+---
+const currentPath = Astro.url.pathname;
+
+const nav = [
+  { href: '/', label: 'Home' },
+  { href: '/blog', label: 'Blog' },
+];
+---
+
+<header>
+  <div class="header-inner">
+    <a href="/" class="brand" aria-label="Home">
+      <span class="bracket">[</span><span class="code-symbol">&lt; /&gt;</span><span class="bracket">]</span>
+    </a>
+    <nav aria-label="Main navigation">
+      <ul>
+        {
+          nav.map(({ href, label }) => (
+            <li>
+              <a
+                href={href}
+                class:list={[{ active: currentPath === href || (href === '/blog' && currentPath.startsWith('/blog')) }]}
+              >
+                {label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<style>
+  header {
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    background: var(--color-bg);
+    z-index: 100;
+    transition: background-color 0.2s;
+  }
+
+  .header-inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: var(--spacing-md) var(--spacing-lg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .brand {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    letter-spacing: 0.1em;
+    border-bottom: none;
+    display: flex;
+    align-items: center;
+    gap: 0.1em;
+  }
+
+  .bracket {
+    color: var(--color-muted);
+    font-size: 1.2rem;
+  }
+
+  .code-symbol {
+    color: var(--color-text);
+    font-family: 'Courier New', monospace;
+    font-size: 1rem;
+  }
+
+  nav ul {
+    list-style: none;
+    display: flex;
+    gap: var(--spacing-lg);
+  }
+
+  nav a {
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+    border-bottom: none;
+    transition: color 0.15s;
+  }
+
+  nav a:hover,
+  nav a.active {
+    color: var(--color-text);
+  }
+
+  nav a.active {
+    border-bottom: 1px solid var(--color-text);
+  }
+</style>
