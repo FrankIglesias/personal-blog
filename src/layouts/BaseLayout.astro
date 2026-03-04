@@ -35,11 +35,11 @@ const { title, description = 'An AI-focused engineering blog' } = Astro.props;
 
 <style is:global>
   :root {
-    --color-bg: #fff;
-    --color-text: #000;
-    --color-muted: #666;
-    --color-border: #e5e5e5;
-    --color-accent: #000;
+    --color-bg: #0a0a0a;
+    --color-text: #fff;
+    --color-muted: #999;
+    --color-border: #2a2a2a;
+    --color-accent: #fff;
     --font-display: 'Bebas Neue', sans-serif;
     --font-body: 'Open Sans', sans-serif;
     --max-width: 800px;
@@ -47,16 +47,6 @@ const { title, description = 'An AI-focused engineering blog' } = Astro.props;
     --spacing-md: 1rem;
     --spacing-lg: 2rem;
     --spacing-xl: 4rem;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --color-bg: #0a0a0a;
-      --color-text: #fff;
-      --color-muted: #999;
-      --color-border: #2a2a2a;
-      --color-accent: #fff;
-    }
   }
 
   *, *::before, *::after {
@@ -78,7 +68,6 @@ const { title, description = 'An AI-focused engineering blog' } = Astro.props;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    transition: background-color 0.2s, color 0.2s;
   }
 
   main {
@@ -136,10 +125,8 @@ const { title, description = 'An AI-focused engineering blog' } = Astro.props;
     font-size: 0.875em;
   }
 
-  @media (prefers-color-scheme: dark) {
-    code:not(pre code) {
-      background: #1a1a1a;
-    }
+  code:not(pre code) {
+    background: #1a1a1a;
   }
 
   /* Prose styles for blog posts */
