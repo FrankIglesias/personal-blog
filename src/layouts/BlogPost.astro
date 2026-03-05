@@ -87,8 +87,7 @@ const formattedDate = pubDate.toLocaleDateString('en-US', {
   .tag {
     font-size: 0.75rem;
     padding: 0.2em 0.6em;
-    border: 1px solid var(--color-border);
-    border-radius: 2px;
+    background-color: var(--color-tag-bg);
     color: var(--color-muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -96,7 +95,7 @@ const formattedDate = pubDate.toLocaleDateString('en-US', {
   }
 
   h1 {
-    font-size: clamp(2.5rem, 6vw, 4rem);
+    font-size: clamp(2.5rem, 10vw, 3.5rem);
     margin-bottom: var(--spacing-md);
   }
 
@@ -116,7 +115,7 @@ const formattedDate = pubDate.toLocaleDateString('en-US', {
   .post-footer {
     margin-top: var(--spacing-xl);
     padding-top: var(--spacing-lg);
-    border-top: 1px solid var(--color-border);
+    border-top: 0.5px solid var(--color-border);
   }
 
   .back-link {
