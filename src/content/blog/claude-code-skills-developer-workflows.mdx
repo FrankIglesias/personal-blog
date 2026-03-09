@@ -1,0 +1,194 @@
+---
+title: Building Claude Code Skills for Developer Workflows
+description: How to write SKILL.md files that turn repetitive CLI workflows into conversational commands — with a real example automating translation key management.
+pubDate: 2026-02-18
+tags: [Claude Code, Developer Tools, Automation, CLI]
+---
+
+Claude Code ships with a skill system that lets you encode team workflows as reusable, conversational commands. Instead of a README that explains how to run a script, you write a `SKILL.md` that tells Claude exactly what to do — reading credentials, confirming intent, running commands, and reporting results.
+
+This post walks through a real skill I built to manage translation keys via the Lokalise CLI, and covers the patterns that make skills reliable in practice.
+
+## What a skill is
+
+A skill is a Markdown file placed in `.claude/skills/<skill-name>/SKILL.md`. Claude Code picks it up automatically and makes it available as a `/skill-name` slash command, or via natural language triggers you define in the frontmatter.
+
+The frontmatter controls when the skill activates:
+
+```yaml
+---
+name: lokalise-upload
+description: >
+  Use this skill when the user wants to create new translation keys in Lokalise.
+  Trigger on: "add key to lokalise", "create translation key", "add $t key".
+---
+```
+
+The body is a prompt — written for Claude, not for a human reader. That distinction matters a lot.
+
+## Writing prompts for Claude, not humans
+
+A README is meant to be skimmed by a developer who will then make their own decisions. A skill prompt is executed literally. That means you need to be explicit about things that feel obvious.
+
+**Credentials** — Tell Claude exactly where to find them and what to do if they're missing:
+
+```markdown
+### 1. Load credentials
+Read `.env` from the project root and extract:
+- `API_TOKEN` — required
+- `PROJECT_ID` — required
+
+If either is missing, stop and tell the user:
+> `API_TOKEN` and/or `PROJECT_ID` are not set in `.env`. Please add them.
+```
+
+**Confirmation** — For any mutating action, make Claude show a summary and wait:
+
+```markdown
+### 3. Confirm before creating
+Show a compact one-line summary per key:
+  my_button   → "Click me"
+  tree_count  → "Number of trees planted"
+Proceed? [y/N]
+
+Wait for confirmation.
+```
+
+This is the most important safety affordance you can add. It makes the skill feel trustworthy.
+
+**Error reporting** — Tell Claude how to surface failures inline, not just at the end:
+
+```markdown
+Show progress: `✓ my_button`, `✗ tree_count (error: ...)`
+After all keys are processed, report total created vs failed.
+```
+
+## The translation key workflow
+
+The specific problem: our codebase uses `$t('my_key')` for i18n. Keys live in Lokalise and get pulled locally via CI. Developers would sometimes add `$t()` calls without registering the key, which caused missing translation warnings in staging.
+
+The fix: a skill that creates keys directly in Lokalise via CLI, without touching the local lang files.
+
+The full skill prompt looks like this:
+
+```markdown
+## Workflow
+
+### 1. Load credentials
+Read `.env` and extract `LOKALISE_TOKEN` and `LOKALISE_PROJECT_ID`.
+Stop with an error message if either is missing.
+
+### 2. Collect key(s) from the user
+Ask for each key: the key name and its English translation text.
+If the user hasn't provided keys yet, ask:
+> What key(s) do you want to create? For each one, provide the key name and English text.
+
+### 3. Confirm before creating
+Show a summary and wait for [y/N].
+
+### 4. Create the keys via CLI
+For each key, run:
+lokalise2 key create \
+  --token "$LOKALISE_TOKEN" \
+  --project-id "$LOKALISE_PROJECT_ID" \
+  --key-name "<KEY>" \
+  --platforms "web" \
+  --filenames '{"web":"resources/lang/%LANG_ISO%/default.php"}' \
+  --translations '[{"language_iso":"en","translation":"<ENGLISH_TEXT>"},{"language_iso":"keys","translation":"<KEY>"}]'
+```
+
+Two translations get created per key: `en` with the English text, and a `keys` locale that mirrors the key name itself (used for debugging — you can switch your app to the `keys` locale to see key names instead of translations).
+
+## Constraints are part of the skill
+
+One thing I've found valuable: explicitly telling Claude what *not* to do. In this case, the local `resources/lang/` directory is managed by Lokalise pulls and should never be touched manually:
+
+```markdown
+## Notes
+- Never modify `resources/lang/` — those files are pulled from Lokalise separately
+- Key name is plain (e.g. `my_button`) — no prefix
+```
+
+Without this, Claude might try to be helpful and create the key locally too. Explicit constraints prevent that.
+
+## Trigger phrases matter
+
+The `description` field doubles as a matching prompt. Vague descriptions lead to the skill not triggering when you expect it to, or triggering when you don't. I include specific trigger phrases:
+
+```yaml
+description: >
+  Trigger on: "lokalise upload", "create lokalise key", "add key to lokalise",
+  "add translation key", "create translation key", "add $t key".
+```
+
+This is worth tuning — run the skill a few times and note what phrases you naturally type. Add those to the trigger list.
+
+## Fallbacks for missing binaries
+
+CLI tools aren't always on `$PATH`. A small but useful addition:
+
+```markdown
+`lokalise2` CLI is assumed to be in PATH.
+If not found, try `~/bin/lokalise2`.
+```
+
+Claude will check both locations before failing. Saves a debug round-trip.
+
+## The result
+
+Once the skill is in place, adding a translation key looks like this:
+
+```
+/lokalise-upload
+> What key(s) do you want to create?
+add `confirm_button` → "Confirm"
+
+Creating 1 key in Lokalise:
+  confirm_button → "Confirm" / keys: "confirm_button"
+Proceed? [y/N] y
+
+✓ confirm_button
+Done. 1 created, 0 failed.
+```
+
+No terminal, no docs, no copy-pasting CLI flags. The workflow is in the skill.
+
+## When to write a skill
+
+Skills pay off when a workflow has:
+
+- **Multiple steps** that need to happen in order
+- **External state** (credentials, APIs, databases) that Claude needs to handle carefully
+- **Confirmation requirements** before mutating anything
+- **Tribal knowledge** that currently lives in a README or someone's head
+
+If you're explaining the same CLI command to teammates more than twice, it's probably worth encoding as a skill.
+
+## Tips for writing better skills
+
+After building a few of these, some patterns keep coming up.
+
+**Number your steps.** Claude follows numbered lists more reliably than prose paragraphs. `### 1. Load credentials / ### 2. Collect input / ### 3. Confirm / ### 4. Execute` gives the model a clear state machine to walk through.
+
+**Write the error message, not just the condition.** Don't write "stop if token is missing." Write the exact message Claude should show:
+```markdown
+If `API_TOKEN` is missing, stop and say:
+> `API_TOKEN` is not set in `.env`. Please add it and try again.
+```
+This makes failures consistent and user-friendly without any extra effort.
+
+**Separate reading from writing.** Structure the skill so all file reads and API calls that gather information happen before any mutation. This gives Claude — and the user — a complete picture before anything changes.
+
+**Use blockquotes for user-facing output.** In the skill body, prefix any text meant to be shown to the user with `>`. It signals intent clearly and keeps the skill readable as documentation too.
+
+**Keep the confirmation atomic.** The confirm step should show everything that's about to happen in one block, not spread across multiple messages. If the user needs to scroll up to remember what they approved, the confirm UX has failed.
+
+**Name your fallbacks explicitly.** If a command might not be on `$PATH`, list exactly where else to look. If an API might return a specific error code, say what it means. Claude won't guess — it'll just fail and report a generic error.
+
+**Version your skill with a comment.** A one-line comment at the top (`<!-- v2: added batch support -->`) costs nothing and saves confusion when you're debugging why a skill behaves differently than you remember writing it.
+
+**Test with bad input first.** Before declaring a skill done, try it with missing credentials, empty input, and a "no" at the confirmation prompt. These are the paths most likely to produce confusing behavior, and they're easy to fix once you've seen them fail once.
+
+---
+
+The full skill described in this post is available on GitHub at [FrankIglesias/lokalise-create-skill](https://github.com/FrankIglesias/lokalise-create-skill). It includes the complete `SKILL.md` ready to drop into any project using Lokalise.
