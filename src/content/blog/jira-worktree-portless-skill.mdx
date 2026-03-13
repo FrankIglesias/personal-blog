@@ -1,6 +1,6 @@
 ---
 title: Claude Code + Git Worktrees + Portless — One Skill to Start Any Ticket
-description: How to build a Claude Code skill that takes a Jira ticket ID, spins up an isolated git worktree, names the branch after the ticket, and launches a Portless dev server at a URL you can actually remember.
+description: How to build a Claude Code skill that takes a Jira ticket ID, spins up an isolated Claude worktree, names the branch after the ticket, and launches a Portless dev server at a URL you can actually remember.
 pubDate: 2026-03-13
 tags: [Claude Code, Jira, Git, Portless, Developer Tools]
 ---
@@ -14,40 +14,37 @@ This post shows a Claude Code skill that collapses the whole thing into one comm
 ```
 
 What it does:
-1. Fetches the Jira ticket and shows you a summary
-2. Creates a git worktree with a branch named `ENG-247-<slug>`
+1. Fetches the Jira ticket via the Jira MCP and shows you a summary
+2. Creates a Claude worktree with a branch named `ENG-247-<slug>`
 3. Starts the dev server via Portless at `https://ENG-247.localhost`
 4. Configures git to prefix every commit in that worktree with `[ENG-247]`
 
 ## The tools involved
 
-**Git worktrees** let you check out multiple branches simultaneously, each in its own directory. Instead of `git stash` / `git checkout` / `git stash pop`, you get a clean directory per ticket — no context switching, no stashed changes to forget about.
+**Claude worktrees** are Claude Code's built-in worktree command. When you ask Claude to create a worktree, it uses the `EnterWorktree` tool, which spins up an isolated git worktree automatically — no manual `git worktree add` needed. Each worktree gets its own branch and directory, so you can work on multiple tickets simultaneously without any context switching.
 
-```bash
-git worktree add ../my-app-ENG-247 -b ENG-247-fix-auth
-# -> creates ../my-app-ENG-247/ on branch ENG-247-fix-auth
+**The Jira MCP** connects Claude Code directly to your Atlassian account. Instead of managing API tokens in `.env` and making raw HTTP calls, you configure the MCP once and Claude can query Jira natively — `getJiraIssue`, `transitionJiraIssue`, `editJiraIssue` — as first-class tools. No credentials in your project, no HTTP boilerplate in your skill.
+
+**Portless** replaces `localhost:3000` with a stable named URL for each running app. Name it after the ticket ID and you get `https://ENG-247.localhost` — readable, collision-free, memorable.
+
+**Claude Code skills** encode multi-step workflows as a `SKILL.md` file that Claude executes as a slash command.
+
+## Setting up the Jira MCP
+
+Add the Atlassian MCP to your Claude Code config (`~/.claude/mcp.json` or via the Claude Code settings UI):
+
+```json
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "npx",
+      "args": ["-y", "@atlassian/mcp"]
+    }
+  }
+}
 ```
 
-**Portless** replaces `localhost:3000` with a stable named URL for each running app. It detects git worktrees and automatically prepends the branch name as a subdomain — but we'll name things explicitly to keep the URL clean.
-
-```bash
-portless ENG-247 pnpm dev
-# -> https://ENG-247.localhost
-```
-
-**Claude Code skills** encode multi-step workflows as a `SKILL.md` file that Claude executes as a slash command. The skill reads credentials, calls APIs, runs shell commands, and confirms before mutating anything.
-
-## Setting up credentials
-
-The skill needs your Jira credentials. Add them to `.env` at your project root:
-
-```bash
-JIRA_BASE_URL=https://your-org.atlassian.net
-JIRA_EMAIL=you@yourcompany.com
-JIRA_API_TOKEN=your_api_token_here
-```
-
-Get your API token at [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
+On first use, Claude will prompt you to authenticate via browser OAuth — no token copying, no `.env` entries. After that, Claude has access to your Jira and Confluence workspaces natively.
 
 Also install Portless globally if you haven't:
 
@@ -70,46 +67,26 @@ description: >
 
 ## Start Ticket Workflow
 
-### 1. Read credentials
-
-Read `.env` from the project root and extract:
-- `JIRA_BASE_URL` — e.g. `https://your-org.atlassian.net`
-- `JIRA_EMAIL`
-- `JIRA_API_TOKEN`
-
-If any are missing, stop and say:
-> Jira credentials are not set in `.env`.
-> Add `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` to continue.
-
-### 2. Get the ticket ID
+### 1. Get the ticket ID
 
 If the user provided a ticket ID (e.g. `ENG-247`), use it.
 If not, ask:
 > Which ticket do you want to start? (e.g. ENG-247)
 
-### 3. Fetch the ticket from Jira
+### 2. Fetch the ticket via the Jira MCP
 
-Call the Jira REST API:
-
-```
-GET {JIRA_BASE_URL}/rest/api/3/issue/{TICKET_ID}
-Authorization: Basic base64({JIRA_EMAIL}:{JIRA_API_TOKEN})
-Accept: application/json
-```
+Use the `getJiraIssue` MCP tool with the ticket ID.
 
 Extract:
-- `fields.summary` — the ticket title
-- `fields.status.name` — current status
-- `fields.assignee.displayName` — assignee (or "Unassigned")
-- `fields.description` (if present) — first paragraph only
+- `summary` — the ticket title
+- `status` — current status
+- `assignee` — assignee display name (or "Unassigned")
+- `description` — first paragraph only, if present
 
-If the API returns 404, stop and say:
+If the ticket is not found, stop and say:
 > Ticket {TICKET_ID} not found. Check the ID and try again.
 
-If the API returns 401, stop and say:
-> Jira authentication failed. Check your `JIRA_EMAIL` and `JIRA_API_TOKEN` in `.env`.
-
-### 4. Show the ticket summary and confirm
+### 3. Show the ticket summary and confirm
 
 Show:
 ```
@@ -124,7 +101,7 @@ Then ask:
 
 Wait for confirmation. If the user says no, stop.
 
-### 5. Derive the branch name
+### 4. Derive the branch name
 
 Convert the ticket summary to a slug:
 - Lowercase
@@ -136,32 +113,23 @@ Final branch name: `{TICKET_ID}-{slug}`
 
 Example: `ENG-247` + `Fix auth redirect loop` → `ENG-247-fix-auth-redirect-loop`
 
-### 6. Create the git worktree
+### 5. Create the Claude worktree
 
-Determine the current repo root with `git rev-parse --show-toplevel`.
+Use the `EnterWorktree` tool to create a new worktree with the branch name from step 4.
 
-The worktree directory goes one level above the repo root:
-`{repo-parent}/{repo-name}-{TICKET_ID}`
+Claude will automatically:
+- Create the worktree directory alongside the repo
+- Check out a new branch named `{branch-name}`
+- Set up the isolated environment
 
-Run:
-```bash
-git worktree add "{worktree-path}" -b "{branch-name}"
-```
+### 6. Configure commit prefix for the worktree
 
-If the branch already exists, run with `--force` and tell the user:
-> Branch {branch-name} already exists — checking it out in a new worktree.
-
-### 7. Configure commit prefix for the worktree
-
-Inside the worktree directory, set a local git hook that prepends the ticket ID to every commit message.
-
-Create `{worktree-path}/.git/hooks/prepare-commit-msg` with:
+Inside the worktree, create `.git/hooks/prepare-commit-msg`:
 
 ```bash
 #!/bin/sh
 TICKET="[{TICKET_ID}]"
 MSG=$(cat "$1")
-# Only prepend if not already present
 if ! echo "$MSG" | grep -q "^\[{TICKET_ID}\]"; then
   echo "$TICKET $MSG" > "$1"
 fi
@@ -169,22 +137,29 @@ fi
 
 Make it executable:
 ```bash
-chmod +x {worktree-path}/.git/hooks/prepare-commit-msg
+chmod +x .git/hooks/prepare-commit-msg
 ```
+
+### 7. Transition the ticket in Jira
+
+Use the `transitionJiraIssue` MCP tool to move the ticket to "In Progress".
+
+If no "In Progress" transition is available, skip this step silently.
 
 ### 8. Start the Portless dev server
 
 In the worktree directory, run:
 ```bash
-cd "{worktree-path}" && portless {TICKET_ID} pnpm dev
+portless {TICKET_ID} pnpm dev
 ```
 
-Run this in the background so the skill can continue.
-
-Wait 3 seconds, then verify the server started by checking if Portless reports an active route for `{TICKET_ID}`:
+Run in the background. Wait 3 seconds, then verify with:
 ```bash
 portless list
 ```
+
+If Portless is not found, skip this step and tell the user to install it:
+> Install Portless with `npm install -g portless` to get the dev URL.
 
 ### 9. Report success
 
@@ -192,32 +167,28 @@ Show:
 ```
 ✓ Worktree:   {worktree-path}
 ✓ Branch:     {branch-name}
+✓ Jira:       {TICKET_ID} moved to In Progress
 ✓ Dev server: https://{TICKET_ID}.localhost
 ✓ Commits will be prefixed with [{TICKET_ID}]
-
-cd {worktree-path} to start working.
 ```
 
 ## Notes
 
 - Never modify the main worktree's files when running this skill
-- The `pnpm dev` command assumes the project uses pnpm — if the user's project uses `npm` or `yarn`, substitute accordingly
-- Portless must be installed globally (`npm install -g portless`) and the proxy must be running (`portless proxy start --https`)
-- If Portless is not found, skip step 8, report the other steps as successful, and tell the user to install Portless to get the dev URL
+- The `pnpm dev` command assumes pnpm — substitute `npm run dev` or `yarn dev` if needed
+- The Jira MCP must be configured in Claude Code settings before using this skill
 ````
 
 ## What the workflow looks like
 
-Once the skill is in place:
-
 ```
 /start-ticket ENG-247
 
-Fetching ENG-247...
+Fetching ENG-247 via Jira MCP...
 
 Ticket:   ENG-247
 Title:    Fix auth redirect loop on OAuth callback
-Status:   In Progress
+Status:   To Do
 Assignee: Francisco Iglesias
 
 Start work on this ticket? This will create a worktree
@@ -225,13 +196,12 @@ and a Portless dev server. [y/N] y
 
 ✓ Worktree:   ../my-app-ENG-247
 ✓ Branch:     ENG-247-fix-auth-redirect-loop
+✓ Jira:       ENG-247 moved to In Progress
 ✓ Dev server: https://ENG-247.localhost
 ✓ Commits will be prefixed with [ENG-247]
-
-cd ../my-app-ENG-247 to start working.
 ```
 
-From that point, every commit you make in that directory automatically starts with `[ENG-247]`:
+From that point, every commit made in that worktree automatically starts with `[ENG-247]`:
 
 ```
 [ENG-247] Fix redirect URI mismatch on OAuth callback
@@ -239,17 +209,23 @@ From that point, every commit you make in that directory automatically starts wi
 [ENG-247] Update env docs
 ```
 
-And your dev server is at `https://ENG-247.localhost` — no port number to remember, no collision with your main branch server.
+And the dev server lives at `https://ENG-247.localhost` — no port to remember, no collision with your main branch server.
+
+## Why the Jira MCP beats raw API calls
+
+The raw API approach requires a token in `.env`, base64 encoding your credentials, building the Authorization header, and handling HTTP error codes manually. The MCP handles all of that at the configuration layer — once.
+
+More importantly, it means your skill has no credentials to manage. The MCP connection is per-user, not per-project. You can share the `SKILL.md` with your team and everyone uses their own Jira account automatically.
 
 ## Running multiple tickets in parallel
 
-Because each ticket gets its own worktree and its own Portless name, you can work on two tickets simultaneously without them interfering:
+Because each ticket gets its own Claude worktree and its own Portless name, you can work on two tickets simultaneously:
 
 ```bash
-# Terminal 1 — inside ../my-app-ENG-247
+# Worktree 1 — ENG-247
 https://ENG-247.localhost
 
-# Terminal 2 — inside ../my-app-ENG-251
+# Worktree 2 — ENG-251
 https://ENG-251.localhost
 
 # Main repo — still on main
@@ -260,19 +236,18 @@ No port juggling. No stashing. Each environment is fully isolated.
 
 ## Extending the skill
 
-A few additions that are worth building on top of this:
+**Teardown** — A matching `/finish-ticket ENG-247` skill that pushes the branch, opens a PR, removes the worktree, and uses `transitionJiraIssue` to move the ticket to `In Review`.
 
-**Transition the ticket** — After creating the worktree, call the Jira API to move the ticket from `To Do` to `In Progress` automatically.
+**Open in editor** — Add `code {worktree-path}` to open the worktree in a new VS Code window.
 
-**Open in editor** — Add a final step that runs `code {worktree-path}` to open the worktree in a new VS Code window.
+**Assign yourself** — Use `editJiraIssue` to assign the ticket to the current user before starting work.
 
-**Teardown skill** — A matching `/finish-ticket ENG-247` skill that pushes the branch, opens a PR, removes the worktree, and transitions the Jira ticket to `In Review`.
-
-The teardown is where the real payoff is — the same ticket ID that named the branch, the worktree, and the dev server also becomes the PR title prefix and the Jira transition trigger. One ID, one workflow, zero manual coordination.
+The teardown is where the full payoff lands — the same ticket ID that named the branch, the worktree, and the dev server also becomes the PR title prefix and the Jira transition trigger. One ID, zero manual coordination.
 
 ## Key Takeaways
 
-- **Git worktrees** give you branch isolation without `git stash` — one directory per ticket
-- **Portless** turns ticket IDs into memorable dev URLs — `https://ENG-247.localhost` instead of `localhost:4322`
+- **Claude worktrees** create isolated branch environments with one tool call — no manual `git worktree add`
+- **The Jira MCP** gives Claude native access to your tickets — no tokens in `.env`, no HTTP boilerplate in the skill
+- **Portless** turns ticket IDs into dev URLs — `https://ENG-247.localhost` instead of `localhost:4322`
 - **The `prepare-commit-msg` hook** enforces ticket prefixes automatically — no discipline required
 - **Claude Code skills** encode the whole setup as a single command — the skill knows your conventions so you don't have to repeat them
