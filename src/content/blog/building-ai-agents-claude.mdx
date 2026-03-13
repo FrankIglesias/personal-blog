@@ -1,182 +1,227 @@
 ---
-title: Building AI Agents with the Claude API
-description: A practical guide to building autonomous AI agents using Claude's tool use and streaming capabilities — from a single function call to a multi-step reasoning loop.
-pubDate: 2025-11-15
-tags: [Claude, Agents, Tool Use, TypeScript]
+title: Creating a Custom GPT with the OpenAI API and GPT Builder
+description: How to define, configure, and deploy a Custom GPT using an OpenAI Actions schema — from writing the JSON spec to wiring it up in the GPT Builder UI.
+pubDate: 2026-03-13
+tags: [OpenAI, ChatGPT, Custom GPT, API, JSON]
 ---
 
-Agents are programs that can reason, decide, and act. With Claude's tool use API, you can build agents that call external functions, evaluate results, and keep going until the job is done. Here's how.
+Custom GPTs let you ship a purpose-built assistant directly inside ChatGPT — with a defined persona, custom instructions, and live API connections through Actions. Here's how to build one from scratch.
 
-## The Core Loop
+## What You're Building
 
-Every agent, no matter how complex, shares the same basic loop:
+A Custom GPT with an **Action** — a connection to an external API described as an OpenAPI 3.1 JSON schema. When a user asks something that maps to your API, ChatGPT calls it automatically and works the response into its reply.
 
-1. Send a message to the model
-2. Check if the model wants to call a tool
-3. Execute the tool, append the result
-4. Repeat until no more tool calls — return the final text
+## Step 1 — Write the OpenAPI Schema
 
-```typescript
-import Anthropic from "@anthropic-ai/sdk";
+Actions are powered by OpenAPI 3.1. You paste this JSON directly into the GPT Builder. Here's a minimal example for a weather API:
 
-const client = new Anthropic();
-
-type Tool = {
-  name: string;
-  description: string;
-  input_schema: object;
-  fn: (input: Record<string, unknown>) => Promise<unknown>;
-};
-
-async function runAgent(userMessage: string, tools: Tool[]) {
-  const messages: Anthropic.MessageParam[] = [
-    { role: "user", content: userMessage },
-  ];
-
-  const toolDefinitions = tools.map(({ name, description, input_schema }) => ({
-    name,
-    description,
-    input_schema,
-  }));
-
-  while (true) {
-    const response = await client.messages.create({
-      model: "claude-opus-4-6",
-      max_tokens: 4096,
-      tools: toolDefinitions,
-      messages,
-    });
-
-    // Append assistant response
-    messages.push({ role: "assistant", content: response.content });
-
-    if (response.stop_reason === "end_turn") {
-      const textBlock = response.content.find((b) => b.type === "text");
-      return textBlock?.type === "text" ? textBlock.text : "";
+```json
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Weather API",
+    "description": "Get current weather and forecasts for any city.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.yourweatherservice.com"
     }
-
-    if (response.stop_reason !== "tool_use") break;
-
-    // Process tool calls
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-    for (const block of response.content) {
-      if (block.type !== "tool_use") continue;
-
-      const tool = tools.find((t) => t.name === block.name);
-      if (!tool) {
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: "Tool not found",
-          is_error: true,
-        });
-        continue;
+  ],
+  "paths": {
+    "/current": {
+      "get": {
+        "operationId": "getCurrentWeather",
+        "summary": "Get current weather for a city",
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The city name, e.g. 'London' or 'New York'"
+          },
+          {
+            "name": "units",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["metric", "imperial"],
+              "default": "metric"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current weather data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "city": { "type": "string" },
+                    "temperature": { "type": "number" },
+                    "condition": { "type": "string" },
+                    "humidity": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
-
-      try {
-        const result = await tool.fn(block.input as Record<string, unknown>);
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(result),
-        });
-      } catch (err) {
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: String(err),
-          is_error: true,
-        });
-      }
-    }
-
-    messages.push({ role: "user", content: toolResults });
-  }
-}
-```
-
-## Defining Tools
-
-Tools are just typed function definitions. Claude decides when to call them — your job is to describe them clearly.
-
-```typescript
-const searchTool: Tool = {
-  name: "web_search",
-  description:
-    "Search the web for current information. Use this when you need up-to-date facts, recent events, or specific data not in your training.",
-  input_schema: {
-    type: "object",
-    properties: {
-      query: {
-        type: "string",
-        description: "The search query",
-      },
     },
-    required: ["query"],
-  },
-  fn: async ({ query }) => {
-    // Wire up to your search API of choice
-    const results = await fetchSearchResults(query as string);
-    return results.slice(0, 5).map((r) => ({
-      title: r.title,
-      snippet: r.snippet,
-      url: r.url,
-    }));
-  },
-};
-```
-
-## Streaming with Tool Use
-
-For long-running tasks, streaming keeps the UI responsive. The pattern is slightly different — you accumulate the stream, then handle tool use once the stream is done.
-
-```typescript
-async function streamingAgent(userMessage: string) {
-  const messages: Anthropic.MessageParam[] = [
-    { role: "user", content: userMessage },
-  ];
-
-  while (true) {
-    const stream = client.messages.stream({
-      model: "claude-opus-4-6",
-      max_tokens: 4096,
-      tools: toolDefinitions,
-      messages,
-    });
-
-    // Stream text chunks as they arrive
-    stream.on("text", (text) => process.stdout.write(text));
-
-    const response = await stream.finalMessage();
-    messages.push({ role: "assistant", content: response.content });
-
-    if (response.stop_reason === "end_turn") break;
-    if (response.stop_reason !== "tool_use") break;
-
-    // Handle tool calls (same as above)
-    const toolResults = await processToolCalls(response.content);
-    messages.push({ role: "user", content: toolResults });
+    "/forecast": {
+      "get": {
+        "operationId": "getForecast",
+        "summary": "Get a 5-day forecast for a city",
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Forecast data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "city": { "type": "string" },
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": { "type": "string" },
+                          "high": { "type": "number" },
+                          "low": { "type": "number" },
+                          "condition": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 ```
 
-## Putting It Together
+A few rules that matter:
+- Every endpoint needs a unique **`operationId`** — ChatGPT uses this to decide which endpoint to call
+- Descriptions on parameters and operations are read by the model, not just humans — write them clearly
+- Your server must be publicly reachable over HTTPS
+
+## Step 2 — Build the API Endpoint
+
+Your API needs to accept the requests ChatGPT will send and return clean JSON. Here's a simple [Hono](https://hono.dev) example:
 
 ```typescript
-const agent = await runAgent(
-  "Research the top 3 open-source LLM frameworks in 2025 and compare their GitHub stars, license, and primary use case.",
-  [searchTool, readUrlTool]
-);
+import { Hono } from "hono";
 
-console.log(agent);
+const app = new Hono();
+
+app.get("/current", async (c) => {
+  const city = c.req.query("city");
+  const units = c.req.query("units") ?? "metric";
+
+  if (!city) {
+    return c.json({ error: "city is required" }, 400);
+  }
+
+  // Fetch from your data source
+  const data = await fetchWeatherData(city, units);
+
+  return c.json({
+    city: data.name,
+    temperature: data.main.temp,
+    condition: data.weather[0].description,
+    humidity: data.main.humidity,
+  });
+});
+
+app.get("/forecast", async (c) => {
+  const city = c.req.query("city");
+  const data = await fetchForecastData(city);
+
+  return c.json({
+    city,
+    days: data.list.slice(0, 5).map((d) => ({
+      date: d.dt_txt,
+      high: d.main.temp_max,
+      low: d.main.temp_min,
+      condition: d.weather[0].description,
+    })),
+  });
+});
+
+export default app;
 ```
 
-The model will search, read, synthesize — and give you a structured answer without you writing any orchestration logic.
+Deploy this somewhere with a public HTTPS URL before moving to the GPT Builder.
+
+## Step 3 — Configure in GPT Builder
+
+1. Go to **chatgpt.com** → your profile → **My GPTs** → **Create a GPT**
+2. Switch to the **Configure** tab
+3. Fill in **Name**, **Description**, and **Instructions** — the instructions act as your system prompt
+
+Example instructions for the weather GPT:
+
+```
+You are a friendly weather assistant. When users ask about weather, always call the API to get real-time data — never guess or use your training data for current conditions. Present temperatures in the unit the user prefers. If a city is ambiguous, ask for clarification before calling the API.
+```
+
+4. Scroll to **Actions** → click **Create new action**
+5. Paste your OpenAPI JSON into the schema editor
+6. Set **Authentication** if your API requires it (API Key, OAuth, or none)
+7. Click **Test** next to each endpoint to verify the connection
+
+## Step 4 — Authentication Options
+
+For protected APIs, GPT Builder supports three auth methods:
+
+```json
+// API Key (sent as a header or query param)
+{
+  "type": "apiKey",
+  "in": "header",
+  "name": "X-API-Key"
+}
+```
+
+```json
+// Bearer token
+{
+  "type": "http",
+  "scheme": "bearer"
+}
+```
+
+For OAuth, you'll configure the authorize URL, token URL, and scopes directly in the GPT Builder UI — no schema changes needed.
+
+## Step 5 — Publish
+
+- **Only me** — private, for your own use
+- **Anyone with a link** — shareable but unlisted
+- **Everyone** — listed in the GPT Store (requires a verified builder profile)
 
 ## Key Takeaways
 
-- **The loop is the agent** — most agent frameworks are just this loop with extra scaffolding
-- **Tool descriptions are prompts** — be specific about when the tool should and shouldn't be used
-- **Append, don't replace** — always push assistant responses and tool results into the messages array before the next turn
-- **Timeouts matter** — set reasonable deadlines; a runaway agent will burn through your API budget fast
+- **`operationId` is the function name** — make it descriptive; the model uses it for routing decisions
+- **Descriptions are prompts** — the clearer your parameter descriptions, the more reliably ChatGPT will fill them correctly
+- **Test with the built-in tester** before publishing — it shows you exactly what request was sent and what came back
+- **HTTPS is non-negotiable** — ChatGPT won't connect to plain HTTP endpoints
+- **Keep responses lean** — ChatGPT has a context window; don't return 500-field objects when 5 fields will do
