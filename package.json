@@ -3,7 +3,10 @@
   "type": "module",
   "version": "0.0.1",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
   },
   "scripts": {
     "dev": "astro dev",
@@ -14,6 +17,7 @@
   },
   "dependencies": {
     "@astrojs/mdx": "^4.0.0",
+    "@astrojs/sitemap": "^3.7.1",
     "@astrojs/vercel": "^8.0.0",
     "astro": "^5.0.0"
   },

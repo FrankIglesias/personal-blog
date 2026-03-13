@@ -14,9 +14,27 @@ const formattedDate = pubDate.toLocaleDateString('en-US', {
   month: 'long',
   day: 'numeric',
 });
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: title,
+  description,
+  datePublished: pubDate.toISOString(),
+  author: {
+    '@type': 'Person',
+    name: 'Francisco Iglesias',
+    url: 'https://blog.franciscoiglesias.me',
+  },
+  url: canonicalURL,
+  keywords: tags.join(', '),
+};
 ---
 
 <BaseLayout title={title} description={description}>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   <article>
     <header class="post-header">
       <div class="post-meta">
@@ -51,7 +69,7 @@ const formattedDate = pubDate.toLocaleDateString('en-US', {
     }
 
     <footer class="post-footer">
-      <a href="/blog" class="back-link">← All posts</a>
+      <a href="/" class="back-link">← All posts</a>
     </footer>
   </article>
 </BaseLayout>

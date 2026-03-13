@@ -1,0 +1,18 @@
+# Francisco Iglesias — Engineering Blog
+# https://blog.franciscoiglesias.me
+
+> Engineering notes on building with AI — Claude, LangChain, OpenAI, and the tools shaping how software gets built.
+
+## Posts
+
+- [Creating a Custom GPT with the OpenAI API and GPT Builder](https://blog.franciscoiglesias.me/blog/building-ai-agents-claude): How to define, configure, and deploy a Custom GPT using an OpenAI Actions schema — from writing the JSON spec to wiring it up in the GPT Builder UI.
+
+- [Prompt Engineering Techniques That Actually Work](https://blog.franciscoiglesias.me/blog/prompt-engineering-techniques): Few-shot prompting, chain-of-thought, and structured output patterns — with concrete code examples you can drop into production.
+
+- [LangChain Workflow Automation — A Live Demo](https://blog.franciscoiglesias.me/blog/langchain-workflow-automation): Build a document ingestion and Q&A pipeline with LangChain, FAISS, and OpenAI embeddings.
+
+- [Building Claude Code Skills for Developer Workflows](https://blog.franciscoiglesias.me/blog/claude-code-skills-developer-workflows): How to write SKILL.md files that turn repetitive CLI workflows into conversational commands.
+
+## Author
+
+Francisco Iglesias — software engineer focused on AI tooling and developer workflows.
