@@ -1,10 +1,4 @@
 ---
-const currentPath = Astro.url.pathname;
-
-const nav = [
-  { href: '/', label: 'Home' },
-  { href: '/blog', label: 'Blog' },
-];
 ---
 
 <header>
@@ -12,22 +6,6 @@ const nav = [
     <a href="/" class="brand" aria-label="Home">
       <img src="/favicon.png" alt="</ >" width="32" height="32" />
     </a>
-    <nav aria-label="Main navigation">
-      <ul>
-        {
-          nav.map(({ href, label }) => (
-            <li>
-              <a
-                href={href}
-                class:list={[{ active: currentPath === href || (href === '/blog' && currentPath.startsWith('/blog')) }]}
-              >
-                {label}
-              </a>
-            </li>
-          ))
-        }
-      </ul>
-    </nav>
   </div>
 </header>
 
@@ -46,7 +24,6 @@ const nav = [
     padding: var(--spacing-md) var(--spacing-lg);
     display: flex;
     align-items: center;
-    justify-content: space-between;
   }
 
   .brand {
@@ -64,30 +41,5 @@ const nav = [
 
   .brand img {
     display: block;
-  }
-
-  nav ul {
-    list-style: none;
-    display: flex;
-    gap: var(--spacing-lg);
-  }
-
-  nav a {
-    font-size: 0.875rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-muted);
-    border-bottom: none;
-    transition: color 0.15s;
-  }
-
-  nav a:hover,
-  nav a.active {
-    color: var(--color-text);
-  }
-
-  nav a.active {
-    border-bottom: 1px solid var(--color-text);
   }
 </style>
