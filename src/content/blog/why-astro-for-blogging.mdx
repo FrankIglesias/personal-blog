@@ -1,0 +1,211 @@
+---
+title: Why I Built This Blog with Astro
+description: Astro is the best framework for a content-focused blog in 2025 — zero JS by default, MDX out of the box, and a first-party integration for everything you actually need.
+pubDate: 2026-03-13
+tags: [Astro, Blogging, Web Development, Performance]
+---
+
+I've built personal sites on Next.js, Gatsby, and plain HTML. For a blog — content-first, minimal interactivity, performance matters — Astro is the clear winner. Here's why, and a tour of the integrations that make it work.
+
+## The Core Idea: Zero JS by Default
+
+Every other framework ships JavaScript to the browser and then hydrates your components. Astro flips the model: it renders everything to static HTML at build time and ships **no JavaScript unless you explicitly ask for it**.
+
+For a blog, this means:
+- Pages load instantly — there's no React runtime, no hydration waterfall
+- Perfect Lighthouse scores out of the box
+- No `useEffect` footguns, no client/server state mismatches
+
+If you *do* need interactivity (a search bar, a code demo), Astro's [Islands architecture](https://docs.astro.build/en/concepts/islands/) lets you hydrate only that one component while everything else stays static.
+
+## MDX First-Class Support
+
+Astro has an official `@astrojs/mdx` integration that goes beyond standard Markdown:
+
+```bash
+pnpm add @astrojs/mdx
+```
+
+```js
+// astro.config.mjs
+import mdx from '@astrojs/mdx';
+
+export default defineConfig({
+  integrations: [mdx()],
+});
+```
+
+With MDX you can drop Astro components directly into your posts:
+
+```mdx
+import Chart from '../components/Chart.astro';
+
+## Performance Results
+
+Here's the actual benchmark data:
+
+<Chart data={benchmarkData} />
+
+Regular markdown continues here...
+```
+
+This is what makes technical blogging genuinely powerful — your posts aren't just text, they're interactive documents.
+
+## Content Collections
+
+Content Collections are Astro's typed content layer. You define a schema with Zod, and every `.md` or `.mdx` file in `src/content/` is validated against it at build time.
+
+```ts
+// src/content/config.ts
+import { defineCollection, z } from 'astro:content';
+
+const blog = defineCollection({
+  type: 'content',
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    pubDate: z.date(),
+    tags: z.array(z.string()),
+  }),
+});
+
+export const collections = { blog };
+```
+
+Then querying your posts is just:
+
+```ts
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('blog'))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+```
+
+If a post is missing a required field or has the wrong type, the build fails with a clear error. No more `undefined` titles slipping into production.
+
+## The Official Integrations
+
+Astro ships a set of first-party integrations that cover everything a blog needs:
+
+### `@astrojs/sitemap`
+
+Automatically generates `sitemap.xml` from every page in your site. One line to configure:
+
+```js
+import sitemap from '@astrojs/sitemap';
+
+export default defineConfig({
+  site: 'https://yourblog.com',
+  integrations: [sitemap()],
+});
+```
+
+No manual maintenance, no forgetting to add new posts. Every build produces a fresh sitemap.
+
+### `@astrojs/rss`
+
+Generates a proper RSS feed from your content collection. A lot of developers still use RSS readers — having a feed is a low-effort way to build a subscriber base.
+
+```ts
+// src/pages/rss.xml.ts
+import rss from '@astrojs/rss';
+import { getCollection } from 'astro:content';
+
+export async function GET(context) {
+  const posts = await getCollection('blog');
+  return rss({
+    title: 'My Blog',
+    description: 'Engineering notes',
+    site: context.site,
+    items: posts.map((post) => ({
+      title: post.data.title,
+      pubDate: post.data.pubDate,
+      description: post.data.description,
+      link: `/blog/${post.slug}/`,
+    })),
+  });
+}
+```
+
+### `@astrojs/image` / Built-in Image Optimization
+
+Astro's built-in `<Image />` component handles resizing, format conversion (WebP, AVIF), and lazy loading automatically:
+
+```astro
+---
+import { Image } from 'astro:assets';
+import cover from '../assets/cover.png';
+---
+
+<Image src={cover} alt="Post cover" width={800} height={400} />
+```
+
+It generates multiple sizes and serves the right one for each device. No external service needed.
+
+### Syntax Highlighting with Shiki
+
+Astro ships with [Shiki](https://shiki.style) built in — the same highlighter VS Code uses. It supports every major language and theme, and it runs at build time, so there's zero JavaScript cost for code blocks.
+
+```js
+// astro.config.mjs
+export default defineConfig({
+  markdown: {
+    shikiConfig: {
+      theme: 'github-dark',
+      wrap: true,
+    },
+  },
+});
+```
+
+No client-side highlighting library. No flash of unstyled code.
+
+## Deployment with Vercel
+
+Astro has an official Vercel adapter that wires everything up automatically:
+
+```bash
+pnpm add @astrojs/vercel
+```
+
+```js
+// astro.config.mjs
+import vercel from '@astrojs/vercel';
+
+export default defineConfig({
+  output: 'static',
+  adapter: vercel(),
+});
+```
+
+Then connect your GitHub repo to Vercel — it detects Astro automatically, sets the build command to `astro build` and the output directory to `dist/`. Every push to `main` triggers a deploy. Every pull request gets a preview URL.
+
+For a static blog like this one, `output: 'static'` is all you need. Vercel serves the pre-built HTML from its edge network, so pages load fast globally with no server cold starts.
+
+## The Performance Payoff
+
+Because Astro ships HTML with no JavaScript runtime, the numbers are hard to argue with:
+
+- **First Contentful Paint** under 0.5s on a cold load
+- **Total Blocking Time** of 0ms — there's nothing to block
+- **Bundle size** for a typical blog post page: ~15KB total, mostly fonts
+
+Compared to a Next.js blog generating the same content, you're looking at 10–20x less JavaScript transferred to the browser.
+
+## When Not to Use Astro
+
+Astro is purpose-built for content sites. If you need:
+
+- A complex client-side app with lots of shared state
+- Real-time data (WebSockets, live updates)
+- Heavy user interactivity throughout every page
+
+...then a full React or SvelteKit app makes more sense. But for a blog, documentation site, or marketing page, Astro is the right tool.
+
+## Key Takeaways
+
+- **Zero JS by default** — your readers only download what they need
+- **MDX + Content Collections** — typed, validated, componentized content
+- **First-party integrations** cover sitemap, RSS, image optimization, and syntax highlighting
+- **Official adapters** for Vercel, Netlify, and Cloudflare make deployment a one-line config
+- The framework is intentionally boring in the best way — it solves blogging problems without introducing new ones
