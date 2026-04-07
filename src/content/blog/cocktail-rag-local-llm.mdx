@@ -1,0 +1,239 @@
+---
+title: Building a Cocktail Chatbot with RAG and Local LLMs
+description: How I built a fully local RAG system for cocktail discovery — from raw API data to vector embeddings, semantic search, and a streaming chat interface with 3D visualizations. Zero API costs.
+pubDate: 2026-04-02
+tags: [RAG, AI, Ollama, Supabase, TypeScript, Vector Search]
+---
+
+I wanted to build a RAG (Retrieval-Augmented Generation) system from scratch without paying for any API. The result is [cocktail-rag](https://github.com/FrankIglesias/cocktail-rag): a chatbot that helps you discover cocktail recipes using natural language, powered entirely by local models via Ollama and a Supabase vector database.
+
+Ask it "something citrusy and not too sweet" and it finds relevant recipes. Ask it to invent one it doesn't know and it politely refuses. Here's how it works end to end.
+
+## The Stack
+
+| Layer | Technology |
+|---|---|
+| Web framework | Hono + Node.js + Hono JSX |
+| LLM (chat) | llama3.2 via Ollama |
+| Embeddings | nomic-embed-text via Ollama |
+| Vector DB | Supabase + pgvector |
+| Dimensionality reduction | ml-pca |
+| Visualization | Plotly.js (3D) |
+| Data source | TheCocktailDB API |
+
+Everything except Supabase runs on your machine. No OpenAI key, no per-token billing.
+
+## Phase 1: Indexing the Data
+
+The pipeline starts with a one-time seed script (`npm run seed`). Here's what happens:
+
+### 1. Fetch from TheCocktailDB
+
+The free CocktailDB API returns cocktail JSON by searching letter by letter (a, b, c, ...). Running through the full alphabet yields **426 cocktail recipes**, each with:
+
+- Name, category, glass type
+- Up to 15 ingredients with measures
+- Instructions
+- Thumbnail image URL
+
+### 2. Convert to Text
+
+Before embedding, each cocktail gets converted to a single structured text blob. This is the `cocktailToText()` function:
+
+```ts
+function cocktailToText(cocktail: Cocktail): string {
+  const ingredients = cocktail.ingredients
+    .map(i => `${i.measure} ${i.name}`)
+    .join(', ');
+
+  return [
+    `Name: ${cocktail.name}`,
+    `Category: ${cocktail.category}`,
+    `Glass: ${cocktail.glass}`,
+    `Ingredients: ${ingredients}`,
+    `Instructions: ${cocktail.instructions}`,
+  ].join('\n');
+}
+```
+
+The format matters. Feeding a structured string to the embedding model captures relationships between ingredients, categories, and preparation style — not just keywords.
+
+### 3. Embed with Ollama
+
+Each text blob is passed to `nomic-embed-text` running locally via Ollama:
+
+```ts
+const response = await ollama.embeddings({
+  model: 'nomic-embed-text',
+  prompt: text,
+});
+// → 768-dimensional float vector
+```
+
+This produces a 768-dimensional vector that positions each cocktail in semantic space. Cocktails with similar flavors, ingredients, or styles end up geometrically close.
+
+### 4. Store in Supabase with pgvector
+
+The embedding and the original recipe data go into a Postgres table with the pgvector extension:
+
+```sql
+CREATE TABLE cocktails (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT,
+  glass TEXT,
+  instructions TEXT,
+  ingredients JSONB,
+  thumbnail TEXT,
+  embedding vector(768)
+);
+
+CREATE INDEX ON cocktails
+  USING ivfflat (embedding vector_cosine_ops)
+  WITH (lists = 100);
+```
+
+The IVFFlat index enables fast approximate nearest-neighbor search. Without it, every query would do a full table scan against all 426 vectors.
+
+**How IVFFlat works:** it partitions the vector space into `lists` clusters (100 here) at index-build time. At query time it only searches the clusters closest to the query vector, skipping the rest. This is the "approximate" part — you trade a small amount of recall for a big speed gain.
+
+The tradeoff is controlled by the `probes` setting, which determines how many clusters are scanned per query. The default is 1, but that turned out to be too aggressive:
+
+```sql
+SET ivfflat.probes = 10;
+```
+
+With `probes = 1`, the search only looks inside the single nearest cluster. If a relevant cocktail happened to land just outside that cluster's boundary, it gets missed entirely — you get fast but incomplete results. Setting it to 10 tells pgvector to check the 10 closest clusters before returning results, which recovers most of the accuracy you'd lose with just 1 probe.
+
+For 426 rows this barely matters for performance, but the correctness difference was noticeable: queries that should have surfaced obvious matches were returning nothing until the probes value went up. A rough rule of thumb is `probes = sqrt(lists)`, which lands at 10 for 100 lists.
+
+A Postgres function handles the similarity lookup:
+
+```sql
+CREATE OR REPLACE FUNCTION match_cocktails(
+  query_embedding vector(768),
+  match_count int
+)
+RETURNS TABLE (
+  id TEXT, name TEXT, category TEXT, glass TEXT,
+  instructions TEXT, ingredients JSONB, thumbnail TEXT,
+  similarity float
+)
+LANGUAGE sql AS $$
+  SELECT *, 1 - (embedding <=> query_embedding) AS similarity
+  FROM cocktails
+  ORDER BY embedding <=> query_embedding
+  LIMIT match_count;
+$$;
+```
+
+## Phase 2: Answering Queries
+
+Every user message triggers two parallel search paths before the LLM ever runs.
+
+### Dual-Mode Search
+
+**Path A — Semantic (vector) search:**
+1. Embed the user message with the same `nomic-embed-text` model
+2. Call `match_cocktails` RPC → returns top 5 by cosine similarity
+
+**Path B — Exact name matching:**
+1. An in-memory cache holds all 426 cocktail names (loaded once at startup)
+2. Scan the user message for any verbatim cocktail name substring
+3. Fetch full records for any matches
+
+Results from both paths are merged and deduplicated. Named matches get priority with `similarity = 1.0`.
+
+### Hallucination Guard
+
+This is the part I'm most satisfied with. Before the LLM ever runs, the top similarity score is checked against a threshold:
+
+```ts
+const SIMILARITY_THRESHOLD = 0.58;
+
+if (results[0].similarity < SIMILARITY_THRESHOLD) {
+  yield { type: 'done', message: "I don't have a cocktail matching that." };
+  return;
+}
+```
+
+If nothing scores above 0.58, the response is generated without touching the LLM. No fabricated recipes.
+
+For queries that do pass the threshold, matched cocktails are injected into the system prompt as literal recipes, with explicit instructions not to mention anything outside that context.
+
+### Streaming the Response
+
+The LLM output is streamed token by token using Server-Sent Events (SSE). The client receives three event types:
+
+- `meta` — matched cocktails + the query's 3D coordinates (for the visualization)
+- `token` — one chunk of LLM output at a time (rendered via marked for markdown)
+- `done` — signals end of stream
+
+Chat history is stored in-memory per session (capped at 20 messages to avoid ballooning context).
+
+### The UI: Hono JSX
+
+There's no React, no Svelte, no separate frontend build. The entire UI is a single Hono JSX component (`src/views/chat.tsx`) rendered server-side by Hono itself.
+
+```tsx
+// src/views/chat.tsx
+export const ChatPage = () => (
+  <html>
+    <head>...</head>
+    <body>
+      <div id="chat">...</div>
+      <div id="chart">...</div>
+      <script dangerouslySetInnerHTML={{ __html: clientScript }} />
+    </body>
+  </html>
+);
+```
+
+Hono's JSX support is built into the framework — no extra dependencies, no compilation step beyond the TypeScript you're already running. The route just calls `c.html(<ChatPage />)` and that's it.
+
+Client-side interactivity (SSE handling, Plotly updates, resizable panels, markdown rendering) is plain vanilla JavaScript inlined in the component as a template string. It's not elegant, but for a single-page tool it keeps the project dead simple — one runtime, one build command, no bundler configuration.
+
+## The 3D Visualization
+
+This is the most visually interesting piece. Every conversation renders a live 3D scatter plot of the vector space.
+
+### Landscape View
+
+On page load, the app calls `/api/layout` which:
+1. Takes all 426 cocktail embeddings (768D each)
+2. Runs PCA to reduce to 3 dimensions
+3. Returns the projected coordinates
+
+This gives a fixed "map" of the cocktail universe. When you search, your query is projected into the same PCA space and rendered as a distinct point. Matched cocktails are highlighted.
+
+### Similarity View
+
+Each conversation turn adds a new layer. Matched cocktails are positioned radially around the query point, with distance proportional to `1 - similarity`. Lines connect query to matches. The closer a cocktail, the more semantically similar it was to your message.
+
+Both views use Plotly.js loaded from CDN with full 3D rotation and hover tooltips.
+
+## What I'd Change
+
+A few things I'd do differently in v2:
+
+- **Persistent sessions**: Chat history currently lives in memory and disappears on restart. A simple Redis store or even a JSON file would fix this.
+- **Chunked embeddings**: Right now each cocktail is one document. For a larger corpus, splitting documents and using a proper chunking strategy would improve retrieval precision.
+- **Re-ranking**: A cross-encoder re-ranker on top of the vector search would improve result quality for ambiguous queries.
+
+## Running It Locally
+
+```bash
+git clone https://github.com/FrankIglesias/cocktail-rag
+cd cocktail-rag
+npm install
+
+# Copy .env.example → .env and fill in Supabase credentials
+# Run migration.sql in the Supabase dashboard
+
+npm run seed   # ~5 minutes, embeds all 426 cocktails
+npm run dev
+```
+
+You need [Ollama](https://ollama.ai) installed with `llama3.2` and `nomic-embed-text` pulled, and a Supabase project for the vector store.
+
+The full source is on [GitHub](https://github.com/FrankIglesias/cocktail-rag).
