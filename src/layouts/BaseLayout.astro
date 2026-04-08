@@ -184,6 +184,26 @@ const ogImageURL = new URL(ogImage, Astro.site);
     margin: var(--spacing-lg) 0;
   }
 
+  .prose img,
+  .prose picture,
+  .prose svg,
+  .prose figure {
+    max-width: 100%;
+  }
+
+  .prose img,
+  .prose svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin: var(--spacing-lg) 0;
+    border-radius: 6px;
+  }
+
+  .prose figure {
+    margin: var(--spacing-lg) 0;
+  }
+
   .prose table {
     width: 100%;
     border-collapse: collapse;
