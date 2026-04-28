@@ -32,7 +32,9 @@ The backend was fast. The API returned in milliseconds. The problem was entirely
 
 Before writing any code, we ran a spike to understand the options. We benchmarked production at 65 items and a virtualization prototype at 10 items:
 
-![Spike comparison: prod 65 items vs virtualized 10 items](/blog/seed-game-virtualization/spike-comparison.png)
+![Production at 65 items: 93.4 MB heap, 87,835 DOM nodes](/blog/seed-game-virtualization/spike-before.png)
+
+![Virtualized at 10 items: 40.3 MB heap, 8,094 DOM nodes](/blog/seed-game-virtualization/spike-after.png)
 
 Even at 10 items, the virtualized version was already faster than production at 65. DOM nodes dropped from 87,835 to 8,094. JS heap went from 93.4 MB to 40.3 MB.
 
@@ -186,9 +188,7 @@ Chrome's Task Manager tells the story at the tab level:
 
 The same tab, the same page — 2.2 GB down to 1.3 GB. And Chrome DevTools showed the internal breakdown:
 
-![Before virtualization: 2.2M DOM nodes, 667 MB JS heap, 27.8% CPU](/blog/seed-game-virtualization/before-perf.png)
-
-![After virtualization: 122K DOM nodes, 284 MB JS heap, 0.3% CPU](/blog/seed-game-virtualization/after-perf.png)
+![Before and after: DOM nodes, JS heap, and CPU usage](/blog/seed-game-virtualization/perf-comparison.png)
 
 | Metric | Before | After | Change |
 |---|---|---|---|
