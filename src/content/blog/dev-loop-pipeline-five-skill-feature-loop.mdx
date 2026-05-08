@@ -1,0 +1,400 @@
+---
+title: A Five-Skill AI Pipeline for the Feature Dev Loop
+description: How I split a feature-development agent into five small, single-responsibility skills that hand off compressed JSON — and why dropping context between steps makes the output more honest, not worse.
+pubDate: 2026-05-08
+tags: [Claude Code, AI Agents, LLM, Next.js, Bun]
+---
+
+import StepDiagram from '../../components/StepDiagram.astro';
+
+Most "AI writes a feature" demos collapse the entire job — read the ticket, plan the change, write the code, verify it, draft a PR — into one giant prompt. It works for a screenshot. It does not work when the spec has constraints the model would rather ignore.
+
+The pipeline I'll describe in this post breaks that one prompt into five skills, each with one responsibility. Each step produces typed JSON that becomes the next step's input, and the handoff *deliberately drops* most of the prior context. That last bit is the interesting part.
+
+The repo is [FrankIglesias/dev-loop-pipeline](https://github.com/FrankIglesias/dev-loop-pipeline).
+
+## The pipeline
+
+| # | Skill         | Responsibility                                              | Output         |
+|---|---------------|-------------------------------------------------------------|----------------|
+| 1 | `spec-freeze` | Convert a ticket into a frozen, verifiable spec             | `FrozenSpec`   |
+| 2 | `impl-scout`  | Audit the codebase and produce an implementation map        | `ImplMap`      |
+| 3 | `code-write`  | Write the code; return file contents + summary              | `CodeSummary`  |
+| 4 | `qa-gate`     | Verify each acceptance criterion against the written code   | `QaReport`     |
+| 5 | `pr-package`  | Produce the PR description + explicit follow-ups            | `PrPackage`    |
+
+Each skill is a Markdown file in `skills/` with YAML frontmatter pinning a provider and model. The provider is resolved as: **request body → skill frontmatter → default (LM Studio / llama3.2)**. So the local default needs nothing but a running LM Studio instance; you can override per-step with Anthropic or OpenAI when a step deserves a stronger model.
+
+## What's a skill, exactly?
+
+A skill in this pipeline is just a Markdown file. No DSL, no plugin manifest, no class to subclass. It looks like this:
+
+````markdown
+---
+name: spec-freeze
+provider: lmstudio
+model: llama3.2
+---
+
+# Spec Freeze
+
+You are a requirements analyst. Your job is to read a ticket description
+and produce a frozen, unambiguous specification in JSON format.
+
+## Input
+
+```json
+{{CONTEXT}}
+```
+
+## Rules
+
+1. `title` — one sentence: what the feature is in plain English.
+2. `acceptance_criteria` — 4–8 items, each a testable behavioral statement.
+3. ...
+
+## Output
+
+Respond with ONLY this JSON. No markdown fences. No explanation.
+
+{ "ticket_id": "<string>", "title": "<string>", ... }
+````
+
+Three things matter:
+
+**The frontmatter is config, not metadata.** `provider` and `model` are read by the orchestrator at runtime to pick which adapter to call. Want to swap `code-write` from a local model to Claude Sonnet for one run? Edit one YAML line. Or override per-request from the API. The skill prompt itself doesn't change.
+
+**`{{CONTEXT}}` is the only injection point.** The orchestrator builds a JSON payload — spec, file contents, prior step output, whatever the handoff demands — and string-substitutes it in. The skill prompt has no idea where the data came from. That's the whole point: each skill is a pure function from "this JSON came in" to "this JSON went out." Easy to test, easy to reason about.
+
+**The body is plain English.** The "Rules" section reads like a runbook for a human analyst — because the model is, in effect, doing what an analyst would do. There's no clever prompt engineering, no jailbreak preamble, no role play. The system prompt is just the contract: *here's your input, here are your rules, here's your output schema*. When something behaves wrong, you edit a Markdown file. No code reload, no model retraining.
+
+This is the part that surprised me most while building it. I expected the orchestration code to be the interesting bit. Turned out the *skills* — five small Markdown files — carry almost all the leverage. The TypeScript exists to shuttle JSON between them and re-read files from disk. Everything that determines output quality lives in the prompts, and "the prompts" are six-paragraph Markdown files anyone on the team can read and edit.
+
+## Skills in detail
+
+Below: what each skill receives, what it sends downstream, and what it actually does. JSON shapes are abbreviated examples — the canonical types live in [`src/lib/pipeline/context.ts`](https://github.com/FrankIglesias/dev-loop-pipeline/blob/main/src/lib/pipeline/context.ts).
+
+### 1. `spec-freeze`
+
+<StepDiagram
+  step={1}
+  name="spec-freeze"
+  receives={['ticketId', 'ticketText', 'repoPath']}
+  sends={['title', 'goal', 'acceptance_criteria[]', 'constraints[]', 'out_of_scope[]']}
+/>
+
+**Does:** Turns a free-form ticket into a structured, frozen spec. No prose — only verifiable fields. Caps acceptance criteria at 8 items so the gate has something to count against.
+
+<details>
+<summary><strong>Receives</strong> — the raw pipeline input</summary>
+
+```json
+{
+  "ticketId": "BCNP-42",
+  "ticketText": "Users want emoji reactions on standup posts. Should not change the existing notification format.",
+  "repoPath": "/abs/path/to/repo"
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Sends</strong> — <code>FrozenSpec</code></summary>
+
+```json
+{
+  "ticket_id": "BCNP-42",
+  "title": "Add emoji reactions to standup posts",
+  "goal": "Let users react with emoji without flooding notifications",
+  "acceptance_criteria": [
+    "Users can add a reaction from the post UI",
+    "Reactions render inline under each post",
+    "Adding a reaction does not produce a notification"
+  ],
+  "constraints": ["Existing notification payload format must not change"],
+  "out_of_scope": ["Custom emoji uploads", "Reaction analytics"]
+}
+```
+
+</details>
+
+### 2. `impl-scout`
+
+<StepDiagram
+  step={2}
+  name="impl-scout"
+  receives={['FrozenSpec (full)', 'repo file tree']}
+  sends={['files_to_change[]', 'patterns_to_follow[]', 'risks[]', 'approach_summary', 'acceptance_criteria[]']}
+/>
+
+**Does:** Reads the repo (gitignore-aware, depth-limited) and produces an implementation plan: which files to touch, which patterns to follow, what could break. This is the only step that sees the full spec.
+
+**Receives** — the full `FrozenSpec` plus a truncated repo file tree.
+
+<details>
+<summary><strong>Sends</strong> — <code>ImplMap</code></summary>
+
+```json
+{
+  "ticket_id": "BCNP-42",
+  "files_to_change": [
+    { "path": "src/components/Post.tsx", "action": "modify", "layer": "component", "reason": "Render reaction row" },
+    { "path": "src/api/reactions.ts", "action": "create", "layer": "api", "reason": "POST /reactions handler" },
+    { "path": "src/api/reactions.test.ts", "action": "test-add", "layer": "test", "reason": "Cover handler" }
+  ],
+  "patterns_to_follow": [
+    { "description": "API handlers use the typed router helper", "example_file": "src/api/posts.ts" }
+  ],
+  "risks": [
+    { "description": "Notification dispatcher fires on any post mutation", "mitigation": "Skip dispatch when mutation type is 'reaction'" }
+  ],
+  "approach_summary": "Add a reactions table + API endpoint, render a reaction row under each post, and short-circuit the notification dispatcher for reaction mutations.",
+  "acceptance_criteria": ["..."]
+}
+```
+
+</details>
+
+### 3. `code-write`
+
+<StepDiagram
+  step={3}
+  name="code-write"
+  receives={['files_to_change[]', 'patterns_to_follow[]', 'risks[]', 'acceptance_criteria[]', 'existing_file_contents']}
+  sends={['files_changed[]', 'changes_made[]', 'what_not_done[]', 'file_contents', 'acceptance_criteria[]']}
+  drops={['spec.goal', 'spec.constraints', 'spec.out_of_scope']}
+/>
+
+**Does:** Implements the plan. This is the step where the spec is *deliberately* missing — the model only sees the implementation plan and the acceptance criteria, not the spec's goal/constraints/out-of-scope. That's what stops it from rationalizing constraint violations.
+
+<details>
+<summary><strong>Receives</strong> — compressed slice of <code>ImplMap</code> + file contents from disk</summary>
+
+```json
+{
+  "ticket_id": "BCNP-42",
+  "files_to_change": [...],
+  "patterns_to_follow": [...],
+  "risks": [...],
+  "approach_summary": "...",
+  "acceptance_criteria": [...],
+  "existing_file_contents": {
+    "src/components/Post.tsx": "...",
+    "src/api/reactions.ts": ""
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Sends</strong> — <code>CodeSummary</code> (and writes files to disk)</summary>
+
+```json
+{
+  "ticket_id": "BCNP-42",
+  "files_changed": ["src/components/Post.tsx", "src/api/reactions.ts", "src/api/reactions.test.ts"],
+  "changes_made": [
+    { "path": "src/api/reactions.ts", "summary": "POST /reactions handler with auth + dedup", "test_coverage": "unit" },
+    { "path": "src/components/Post.tsx", "summary": "Adds <ReactionRow> under post body", "test_coverage": "none" }
+  ],
+  "what_not_done": ["No e2e test added — flagged for follow-up"],
+  "acceptance_criteria": [...],
+  "file_contents": { "...": "..." }
+}
+```
+
+</details>
+
+### 4. `qa-gate`
+
+<StepDiagram
+  step={4}
+  name="qa-gate"
+  receives={['files_changed[]', 'acceptance_criteria[]', 'file_contents (re-read from disk)']}
+  sends={['passed', 'criteria_results[]', 'issues[]', 'lint_and_types_passed', 'files_changed[]']}
+  drops={['ImplMap (entire)']}
+/>
+
+**Does:** Verifies each acceptance criterion against the code that was actually written. Receives no plan — only the criteria and the files. Self-graded passes are blocked by construction: the model can't reference its own earlier promises because they're not in context.
+
+<details>
+<summary><strong>Receives</strong> — criteria, file list, file contents re-read from disk</summary>
+
+```json
+{
+  "ticket_id": "BCNP-42",
+  "files_changed": [...],
+  "changes_made": [...],
+  "what_not_done": [...],
+  "acceptance_criteria": [...],
+  "file_contents": { "src/api/reactions.ts": "<actual contents>", "...": "..." }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Sends</strong> — <code>QaReport</code></summary>
+
+```json
+{
+  "ticket_id": "BCNP-42",
+  "passed": false,
+  "lint_and_types_passed": true,
+  "criteria_results": [
+    {
+      "criterion": "Adding a reaction does not produce a notification",
+      "status": "not-verified",
+      "evidence": "src/api/reactions.ts:42 calls notify() unconditionally",
+      "issues": ["Dispatcher short-circuit missing"]
+    }
+  ],
+  "issues": [
+    { "severity": "blocker", "description": "Reactions trigger notifications", "file": "src/api/reactions.ts", "suggestion": "Skip notify() when mutation type is 'reaction'" }
+  ],
+  "acceptance_criteria": [...],
+  "files_changed": [...]
+}
+```
+
+</details>
+
+### 5. `pr-package`
+
+<StepDiagram
+  step={5}
+  name="pr-package"
+  receives={['spec.title', 'QaReport (full)', 'files_changed[]', 'acceptance_criteria[]']}
+  sends={['pr_title', 'pr_body', 'follow_ups[]']}
+  drops={['changes_made detail', 'full FrozenSpec']}
+/>
+
+**Does:** Drafts the PR description from the verdict. Follow-ups are a first-class output — not buried in the body — so deferred work doesn't disappear.
+
+<details>
+<summary><strong>Receives</strong> — full <code>QaReport</code> + <code>spec.title</code></summary>
+
+```json
+{
+  "ticket_id": "BCNP-42",
+  "spec_title": "Add emoji reactions to standup posts",
+  "qa_report": { "passed": false, "criteria_results": [...], "issues": [...] },
+  "files_changed": [...],
+  "acceptance_criteria": [...]
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Sends</strong> — <code>PrPackage</code></summary>
+
+```json
+{
+  "ticket_id": "BCNP-42",
+  "pr_title": "BCNP-42: Add emoji reactions to standup posts",
+  "pr_body": "## Summary\n...\n## Acceptance criteria\n- [x] Users can add a reaction\n- [ ] Adding a reaction does not produce a notification (blocker — see follow-ups)\n",
+  "follow_ups": [
+    { "title": "Skip notification dispatch for reaction mutations", "reason": "QA blocker — constraint violation", "priority": "high" },
+    { "title": "Add e2e test for reaction flow", "reason": "Coverage gap flagged in code-write", "priority": "medium" }
+  ]
+}
+```
+
+</details>
+
+## Why split it at all
+
+The first version of this was one prompt. Give it the ticket, give it the file tree, ask for the diff. Two problems:
+
+1. **Constraint amnesia.** When a ticket said "do not change the existing logging format," the model would acknowledge it in the spec, then quietly change it in the code, then claim in QA that the constraint was respected. All three steps shared context — including its own earlier promise — so the rationalization was self-reinforcing.
+2. **No honest QA step.** Asking the model "did you satisfy all the acceptance criteria?" right after writing the code produced 100% pass rates. Of course it did. It was grading its own homework with the homework still on the table.
+
+Both problems traced back to the same root cause: too much shared context across responsibilities the model should treat as adversarial.
+
+## Context compression as a first-class concern
+
+Every handoff is a deliberate compression decision. The adapters live in one file — `src/lib/helpers/stepAdapters.ts` — one function per handoff, one place to audit.
+
+Here's the most important one, in plain English:
+
+```
+impl-scout → code-write
+  SENDS:  files_to_change, patterns, risks, approach_summary,
+          acceptance_criteria, existing file contents (re-read from disk)
+  DROPS:  spec.goal, spec.constraints, spec.out_of_scope
+  WHY:    re-sending the spec lets code-write rationalize constraint
+          violations instead of just following the plan.
+```
+
+Read that twice. The instinct is to forward the full spec at every step "so the model has all the context." But the spec contains negative constraints — "do not touch X" — and a model holding those constraints alongside the implementation plan will, with surprising frequency, reinterpret them to fit what it wants to write. Drop the spec at this boundary and `code-write` has no choice: implement the plan as written.
+
+The same trick applies between `code-write` and `qa-gate`:
+
+```
+code-write → qa-gate
+  SENDS:  files_changed, changes_made, what_not_done,
+          acceptance_criteria, written file contents (re-read from disk)
+  DROPS:  ImplMap entirely
+  WHY:    the gate evaluates what was BUILT vs criteria — not plan
+          vs criteria. Files are re-read from disk so the gate sees
+          what was actually written, not what the model claimed.
+```
+
+Re-reading from disk is the second piece. The model's `code-write` output includes a summary of what it changed; the gate ignores that summary and reads the actual files. Self-reported summaries lie under pressure. Disk doesn't.
+
+## Frontend, but a real one
+
+The whole thing runs in the browser. No CLI required. You fill in:
+
+- **Ticket ID** (e.g. `BCNP-42`)
+- **Provider** — LM Studio, Anthropic, or OpenAI
+- **Model** — auto-detected for LM Studio
+- **Repo path** — absolute path to the target repo
+- **Ticket description** — optional but improves output quality
+
+Click run, and each step streams to a live log via SSE. Step cards update as outputs arrive; click any completed card to inspect its full JSON. Every run gets a short `run-id` and saves intermediate outputs to `.pipeline-runs/{run-id}/`, so you can resume from step 3 without re-running 1 and 2.
+
+The stack is intentionally boring: Next.js 15 App Router, Bun, TypeScript strict, Biome. The interesting code is the orchestrator, not the shell around it.
+
+## JSON parsing, three layers deep
+
+LLM JSON output is a known hazard — trailing commas, unquoted keys, fences around the response, prose before or after the object. The parser has three fallbacks:
+
+1. `JSON.parse(raw)`
+2. `JSON.parse(stripJsonFences(raw))` — strips ```` ```json ```` wrappers
+3. `JSON.parse(jsonrepair(stripped))` — recovers trailing commas, unquoted keys, etc.
+
+Raw output is always saved as `{step}.raw.txt` next to the parsed JSON. When a parse fails, you see exactly what the model emitted, not a sanitized retry. This has saved me hours.
+
+## Provider abstraction in 4 lines
+
+```ts
+interface LLMProvider {
+  name: string;
+  complete(systemPrompt: string, userMessage: string): Promise<CompletionResult>;
+}
+```
+
+That's it. Three adapters implement it: `LMStudioProvider` (OpenAI-compatible, no key, default), `AnthropicProvider`, `OpenAIProvider`. Skills name a provider in their frontmatter; the orchestrator picks the right adapter at runtime. Adding a new provider means writing one file.
+
+The default is LM Studio because the whole pipeline should work with zero accounts and zero spend. Run a local model, point at `http://localhost:1234/v1`, done. Anthropic and OpenAI are escape hatches when one specific step (usually `code-write`) needs a stronger model — the per-skill provider override means you don't pay frontier prices for the four steps that don't need them.
+
+## What I'd tell anyone building something similar
+
+**Pick a single artifact that flows between steps.** Mine is JSON because every step's output is structured. If your pipeline is more freeform, pick Markdown — but pick *one* and be ruthless about it. Mixed formats turn step adapters into translation layers.
+
+**Make context drops explicit and reviewable.** The fact that all my adapters are in one file isn't an accident. When something goes wrong, the diagnosis is almost always "the wrong context flowed across a boundary," and you want one file open to fix it.
+
+**Re-read state from disk between steps.** Don't trust the model's report of what it just did. Read the file. The diff between "what the model says it wrote" and "what's on disk" is often where the bug is.
+
+**Save raw output unconditionally.** The day you hit a parse failure on a 30-second LLM call you didn't save, you will regret it. Disk is cheap.
+
+**Resist the urge to share more context.** Every time I've thought "this step would do better if it also had X from an earlier step," it turned out X was the thing causing the model to drift. Less context is usually better, not worse — as long as the *necessary* context is preserved.
+
+---
+
+The pipeline isn't trying to replace a developer. It's trying to make the boring parts of the dev loop — freezing a spec, mapping a change, drafting a PR — reproducible and inspectable. Five small skills with honest handoffs do that better than one big prompt ever did.
+
+Repo: [FrankIglesias/dev-loop-pipeline](https://github.com/FrankIglesias/dev-loop-pipeline).

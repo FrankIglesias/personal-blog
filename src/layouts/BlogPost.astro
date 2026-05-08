@@ -130,6 +130,60 @@ const jsonLd = {
     overflow: hidden;
   }
 
+  .prose :global(details) {
+    margin: var(--spacing-md) 0;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-tag-bg);
+  }
+
+  .prose :global(details > summary) {
+    cursor: pointer;
+    padding: 0.6em 1em;
+    font-size: 0.9rem;
+    color: var(--color-muted);
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+  }
+
+  .prose :global(details > summary::-webkit-details-marker) {
+    display: none;
+  }
+
+  .prose :global(details > summary::before) {
+    content: '▶';
+    font-size: 0.7em;
+    line-height: 1;
+    transition: transform 0.15s ease;
+    color: var(--color-muted);
+    flex-shrink: 0;
+  }
+
+  .prose :global(details[open] > summary::before) {
+    transform: rotate(90deg);
+  }
+
+  .prose :global(details > summary:hover) {
+    color: var(--color-text);
+  }
+
+  .prose :global(details[open] > summary) {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .prose :global(details > *:not(summary)) {
+    margin-left: 1em;
+    margin-right: 1em;
+  }
+
+  .prose :global(details > pre) {
+    margin-top: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+  }
+
   .post-footer {
     margin-top: var(--spacing-xl);
     padding-top: var(--spacing-lg);

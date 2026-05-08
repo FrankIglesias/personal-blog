@@ -1,0 +1,177 @@
+---
+interface Props {
+  step: number;
+  name: string;
+  receives: string[];
+  sends: string[];
+  drops?: string[];
+}
+
+const { step, name, receives, sends, drops = [] } = Astro.props;
+
+const lineH = 18;
+const padX = 14;
+const padY = 12;
+const headerH = 30;
+const maxItems = Math.max(receives.length, sends.length, 1);
+const boxH = headerH + padY + maxItems * lineH + padY;
+
+const leftW = 250;
+const midW = 220;
+const rightW = 250;
+const gap = 30;
+const totalW = leftW + midW + rightW + gap * 2;
+
+const dropH = drops.length ? padY + lineH * (drops.length + 1) + padY + 12 : 0;
+const totalH = boxH + dropH + 20;
+
+const leftX = 0;
+const midX = leftW + gap;
+const rightX = leftW + gap + midW + gap;
+const midY = (boxH - headerH) / 2;
+---
+
+<figure class="step-diagram" aria-label={`Step ${step} ${name} data flow`}>
+  <svg viewBox={`0 0 ${totalW} ${totalH}`} xmlns="http://www.w3.org/2000/svg" role="img">
+    <defs>
+      <marker id={`arrow-${step}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
+      </marker>
+    </defs>
+
+    {/* Receives box */}
+    <g class="box">
+      <rect x={leftX} y="0" width={leftW} height={boxH} rx="6" />
+      <text x={leftX + padX} y={20} class="label">Receives</text>
+      <line x1={leftX + padX} y1="26" x2={leftX + leftW - padX} y2="26" class="rule" />
+      {receives.map((item, i) => (
+        <text x={leftX + padX} y={headerH + padY + (i + 1) * lineH - 4} class="item">• {item}</text>
+      ))}
+    </g>
+
+    {/* Skill box */}
+    <g class="skill">
+      <rect x={midX} y={midY} width={midW} height={headerH * 2} rx="8" />
+      <text x={midX + midW / 2} y={midY + headerH - 6} class="step-num" text-anchor="middle">step {step}</text>
+      <text x={midX + midW / 2} y={midY + headerH + 16} class="step-name" text-anchor="middle">{name}</text>
+    </g>
+
+    {/* Sends box */}
+    <g class="box">
+      <rect x={rightX} y="0" width={rightW} height={boxH} rx="6" />
+      <text x={rightX + padX} y={20} class="label">Sends</text>
+      <line x1={rightX + padX} y1="26" x2={rightX + rightW - padX} y2="26" class="rule" />
+      {sends.map((item, i) => (
+        <text x={rightX + padX} y={headerH + padY + (i + 1) * lineH - 4} class="item">• {item}</text>
+      ))}
+    </g>
+
+    {/* Arrows */}
+    <line x1={leftW} y1={boxH / 2} x2={midX - 2} y2={boxH / 2} class="arrow" marker-end={`url(#arrow-${step})`} />
+    <line x1={midX + midW} y1={boxH / 2} x2={rightX - 2} y2={boxH / 2} class="arrow" marker-end={`url(#arrow-${step})`} />
+
+    {/* Drops annotation */}
+    {drops.length > 0 && (
+      <g class="drops">
+        <line x1={midX + midW / 2} y1={midY + headerH * 2} x2={midX + midW / 2} y2={boxH + 14} class="drop-line" />
+        <text x={midX + midW / 2} y={boxH + 30} text-anchor="middle" class="drop-label">drops</text>
+        {drops.map((item, i) => (
+          <text x={midX + midW / 2} y={boxH + 30 + (i + 1) * lineH} text-anchor="middle" class="drop-item">{item}</text>
+        ))}
+      </g>
+    )}
+  </svg>
+</figure>
+
+<style>
+  .step-diagram {
+    margin: var(--spacing-lg) 0;
+    overflow-x: auto;
+  }
+
+  .step-diagram svg {
+    display: block;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    color: var(--color-text);
+    font-family: var(--font-body);
+  }
+
+  .box rect {
+    fill: var(--color-tag-bg);
+    stroke: var(--color-border);
+    stroke-width: 1;
+  }
+
+  .skill rect {
+    fill: var(--color-text);
+    stroke: var(--color-text);
+  }
+
+  .label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    fill: var(--color-muted);
+  }
+
+  .rule {
+    stroke: var(--color-border);
+    stroke-width: 0.5;
+  }
+
+  .item {
+    font-size: 12px;
+    fill: var(--color-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .step-num {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    fill: var(--color-bg, #fff);
+    opacity: 0.7;
+  }
+
+  .step-name {
+    font-size: 14px;
+    font-weight: 600;
+    fill: var(--color-bg, #fff);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .arrow {
+    stroke: currentColor;
+    stroke-width: 1.5;
+    fill: none;
+  }
+
+  .drop-line {
+    stroke: var(--color-muted);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+  }
+
+  .drop-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    fill: var(--color-muted);
+  }
+
+  .drop-item {
+    font-size: 11px;
+    fill: var(--color-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .step-num,
+    .step-name {
+      fill: var(--color-bg, #111);
+    }
+  }
+</style>
