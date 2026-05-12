@@ -7,7 +7,7 @@ interface Props {
 }
 
 const { post } = Astro.props;
-const { title, description, pubDate, tags, codesandbox } = post.data;
+const { title, description, pubDate, tags, codesandbox, private: isPrivate } = post.data;
 
 const formattedDate = pubDate.toLocaleDateString('en-US', {
   year: 'numeric',
@@ -33,7 +33,7 @@ const jsonLd = {
 };
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} noindex={isPrivate}>
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   <article>
     <header class="post-header">

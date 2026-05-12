@@ -1,0 +1,116 @@
+---
+title: "Refactoring a Visit-Counting Widget"
+description: "A visit-counting widget embedded across client sites had six compounding problems. Here's how a full-stack refactor changed the frontend, backend, and infrastructure."
+pubDate: 2026-05-12
+tags: [Performance, Nuxt, Redis, AWS, Refactoring, Architecture]
+private: true
+---
+
+import WidgetArchDiagram from '../../components/WidgetArchDiagram.astro';
+
+This widget makes that possible with a single `<script>` tag. A client pastes it into their site, configures a threshold and an action, and the widget handles the rest — rendering a small iFrame that tracks visits, displays progress, and fires the configured action automatically when the target is reached.
+
+We built and maintained this widget for a while. At some point the infrastructure underneath it stopped keeping up. Here's what we changed and why.
+
+---
+
+## The six problems
+
+The issues weren't isolated. Each one made the others worse.
+
+- **Wrong stack.** The widget was built on Laravel + Vue — no server-side rendering, not SEO-friendly, and the wrong fit for a UI widget embedded on external sites.
+- **No autoscaling.** Everything ran on a single EC2 instance. Any traffic spike from a high-volume client site was a potential outage.
+- **No versioning.** Deployments had no rollback capability. Every release was a gamble.
+- **Heavy bundle.** The widget used Zoid — a cross-origin component framework by PayPal for managing iFrame communication. It worked, but it bloated the snippet to 21kb.
+- **Synchronous side effects.** The threshold-triggered action was fired inline as a synchronous blocking call. Under load, failures broke the widget entirely.
+- **Zero referrer validation.** Any domain could load the widget with no checks. No access control at all.
+
+---
+
+## The new architecture
+
+The refactor touched every layer: frontend, backend, and infrastructure.
+
+<WidgetArchDiagram />
+
+The client embeds a lightweight JS snippet. The snippet renders an iFrame pointing to a Nuxt SSR app running on AWS App Runner. Visit counts are stored in Redis. When a threshold is hit, a job is dispatched to an async queue — the triggered action and metrics generation are both decoupled from the request path.
+
+---
+
+## Redis and the async queue: the two most impactful changes
+
+### Visit counting: MySQL → Redis
+
+The old system hit the database on every request. No caching. Under load, this became a bottleneck that slowed everything downstream.
+
+The new system uses Redis as the visit counter. Reads are in-memory — microsecond latency, no DB pressure, horizontally scalable. The database is no longer in the hot path.
+
+### Threshold actions: synchronous → async queue
+
+Previously, the triggered action was a blocking call made inline during the request. If it was slow or failed, the widget broke. There was no retry mechanism.
+
+The new system queues the job and returns immediately. The queue worker processes the action asynchronously — decoupled, retryable, non-blocking. The widget's response time is no longer tied to whether the downstream action succeeds.
+
+### Infrastructure: single EC2 → AWS App Runner
+
+Replacing the single EC2 instance with AWS App Runner gave us fully managed autoscaling. Traffic spikes across client sites are handled automatically, with no manual intervention.
+
+---
+
+## No framework
+
+The original widget used Zoid — a cross-origin component framework by PayPal designed to manage iFrame communication across origins. It handled things like passing props into the iFrame, syncing state between parent and child, and managing the lifecycle of cross-origin components.
+
+The problem is that none of that was actually needed here. The widget's iFrame doesn't need two-way communication with the parent page. It loads, it counts, it displays. The parent just needs to inject it — no shared state, no prop passing, no lifecycle coordination. Zoid solved a problem we didn't have, and cost 21kb to do it.
+
+A few lines of vanilla JS to create the iFrame element, set its source, and append it to the DOM is all this widget ever needed. Once we had versioning in place and could deploy with confidence, dropping the dependency was straightforward.
+
+| | Bundle size |
+|---|---|
+| Before (Zoid) | 21kb |
+| After (Vanilla JS) | 1.3kb |
+
+For a script tag that clients paste into their websites, bundle size has a real cost — it adds to their page load, not yours. The smaller the snippet, the easier the conversation with clients about adding it.
+
+---
+
+## The complete before/after
+
+| Area | Before | After |
+|---|---|---|
+| Frontend | Vue (no SSR, no SEO) | Nuxt (full SSR, SEO-ready) |
+| Backend | Laravel | Nuxt backend |
+| Database | MySQL | Redis |
+| Infrastructure | Single EC2 (no autoscaling) | AWS App Runner (autoscaling) |
+| Widget Layer | Zoid framework (21kb) | Vanilla JS (1.3kb — 94% smaller) |
+| Triggered Action | Synchronous, blocking | Async queue, decoupled |
+| CI/CD | GitLab + Jenkins | GitHub Webhooks |
+
+---
+
+## Performance results
+
+The numbers came from Sentry after the refactor shipped.
+
+**p50** is the median — half of requests are faster than this. **p95** means 95% of requests finish within this time; the remaining 5% take longer. **p99** is the slowest 1% — the worst-case tail your users actually experience.
+
+| Period | p50 | p95 | p99 |
+|---|---|---|---|
+| Before | 65ms | 1,271ms | 2,803ms |
+| After | 33ms | **53ms** | 2,971ms |
+
+p95 went from 1,271ms to 53ms — roughly 24× faster. The p50 improvement is real but modest (65ms → 33ms). The dramatic gain is in the tail: requests that used to take over a second now almost always resolve in under 60ms.
+
+At the time of measurement: 1.3M+ requests per day, ~211k widget sessions per day, ~1,900 active users.
+
+---
+
+## What to take away
+
+**Async queues change the failure model.** When the triggered action is synchronous, every failure is the widget's problem. When it's queued, the widget is immune to downstream slowness. For any side effect that doesn't need to block the response, a queue should be the default choice.
+
+**Redis for counters is obvious in hindsight.** Hitting a relational database on every page view to increment a counter is a common mistake. Redis `INCR` is atomic, in-memory, and trivially fast. If you're counting anything at high frequency, that's where the counter belongs.
+
+**Bundle size matters more for third-party scripts.** For your own app, 21kb is nothing. For a script tag you're asking clients to add to their sites, it's real friction — slower page loads, more skeptical clients, harder conversations about performance impact. The bar is different when you don't control the host page.
+
+**Versioning enables refactoring.** We couldn't safely drop Zoid until we had proper versioning and rollback in place. The deployment infrastructure change came first, and it unlocked the bundle cleanup. Sometimes the thing blocking a refactor isn't the code — it's the deployment story.

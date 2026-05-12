@@ -1,0 +1,165 @@
+---
+// Widget architecture diagram:
+// Client Site → JS Snippet → iFrame → Nuxt SSR → Redis
+//                                                   ↓
+//                                             Async Queue
+//                                            ↙           ↘
+//                                   Threshold Action   Metrics Generator
+---
+
+<figure class="arch-diagram" aria-label="Widget architecture flow diagram">
+  <svg viewBox="0 0 660 280" xmlns="http://www.w3.org/2000/svg" role="img">
+    <defs>
+      <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#666" />
+      </marker>
+    </defs>
+
+    <!-- ── Row 1: top 5 boxes ─────────────────────────────────────────── -->
+
+    <!-- Client Site -->
+    <g class="node external">
+      <rect x="10" y="10" width="100" height="52" rx="6" />
+      <text x="60" y="32" text-anchor="middle" class="node-title">Client Site</text>
+      <text x="60" y="50" text-anchor="middle" class="node-sub">external</text>
+    </g>
+
+    <!-- JS Snippet -->
+    <g class="node">
+      <rect x="138" y="10" width="100" height="52" rx="6" />
+      <text x="188" y="32" text-anchor="middle" class="node-title">JS Snippet</text>
+      <text x="188" y="50" text-anchor="middle" class="node-sub">&lt;script&gt; tag</text>
+    </g>
+
+    <!-- iFrame -->
+    <g class="node">
+      <rect x="266" y="10" width="100" height="52" rx="6" />
+      <text x="316" y="36" text-anchor="middle" class="node-title">iFrame</text>
+    </g>
+
+    <!-- Nuxt SSR -->
+    <g class="node accent">
+      <rect x="394" y="10" width="112" height="52" rx="6" />
+      <text x="450" y="32" text-anchor="middle" class="node-title">Nuxt SSR</text>
+      <text x="450" y="50" text-anchor="middle" class="node-sub">App Runner</text>
+    </g>
+
+    <!-- Redis -->
+    <g class="node accent">
+      <rect x="534" y="10" width="116" height="52" rx="6" />
+      <text x="592" y="32" text-anchor="middle" class="node-title">Redis</text>
+      <text x="592" y="50" text-anchor="middle" class="node-sub">visit counter</text>
+    </g>
+
+    <!-- ── Row 1 horizontal arrows ────────────────────────────────────── -->
+    <line x1="111" y1="36" x2="136" y2="36" class="arrow" marker-end="url(#arrowhead)" />
+    <line x1="239" y1="36" x2="264" y2="36" class="arrow" marker-end="url(#arrowhead)" />
+    <line x1="367" y1="36" x2="392" y2="36" class="arrow" marker-end="url(#arrowhead)" />
+    <line x1="507" y1="36" x2="532" y2="36" class="arrow" marker-end="url(#arrowhead)" />
+
+    <!-- ── Elbow: Redis → Async Queue ────────────────────────────────── -->
+    <!-- down from Redis bottom-center, left to queue center, down to queue top -->
+    <polyline points="592,62 592,100 330,100 330,130" class="arrow" marker-end="url(#arrowhead)" />
+
+    <!-- ── Row 2: Async Queue ─────────────────────────────────────────── -->
+    <g class="node queue">
+      <rect x="220" y="130" width="220" height="52" rx="6" />
+      <text x="330" y="152" text-anchor="middle" class="node-title">Async Queue</text>
+      <text x="330" y="170" text-anchor="middle" class="node-sub">job dispatcher</text>
+    </g>
+
+    <!-- ── Fork: Async Queue → two output boxes ──────────────────────── -->
+    <!-- shared stem down from queue bottom, then left/right branches -->
+    <line x1="330" y1="182" x2="330" y2="210" class="connector" />
+    <line x1="170" y1="210" x2="490" y2="210" class="connector" />
+    <line x1="170" y1="210" x2="170" y2="228" class="arrow" marker-end="url(#arrowhead)" />
+    <line x1="490" y1="210" x2="490" y2="228" class="arrow" marker-end="url(#arrowhead)" />
+
+    <!-- ── Row 3: output boxes ────────────────────────────────────────── -->
+
+    <!-- Threshold Action -->
+    <g class="node output">
+      <rect x="90" y="228" width="160" height="52" rx="6" />
+      <text x="170" y="250" text-anchor="middle" class="node-title">Threshold Action</text>
+      <text x="170" y="268" text-anchor="middle" class="node-sub">triggered</text>
+    </g>
+
+    <!-- Metrics Generator -->
+    <g class="node output">
+      <rect x="410" y="228" width="160" height="52" rx="6" />
+      <text x="490" y="250" text-anchor="middle" class="node-title">Metrics Generator</text>
+      <text x="490" y="268" text-anchor="middle" class="node-sub">analytics</text>
+    </g>
+  </svg>
+</figure>
+
+<style>
+  .arch-diagram {
+    margin: var(--spacing-lg) 0;
+    overflow-x: auto;
+  }
+
+  .arch-diagram svg {
+    display: block;
+    width: 100%;
+    max-width: 660px;
+    margin: 0 auto;
+    font-family: var(--font-body);
+  }
+
+  .node rect {
+    fill: #30302e;
+    stroke: #444;
+    stroke-width: 1;
+  }
+
+  .node.external rect {
+    fill: #252525;
+    stroke: #444;
+    stroke-dasharray: 4 3;
+  }
+
+  .node.accent rect {
+    fill: #1e3a3a;
+    stroke: #2a6060;
+    stroke-width: 1.5;
+  }
+
+  .node.queue rect {
+    fill: #1a1a2e;
+    stroke: #3a3a6a;
+    stroke-width: 1.5;
+  }
+
+  .node.output rect {
+    fill: #1e2a1e;
+    stroke: #2a5a2a;
+    stroke-width: 1.5;
+  }
+
+  .node-title {
+    font-size: 13px;
+    font-weight: 600;
+    fill: #fff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .node-sub {
+    font-size: 10px;
+    fill: #888;
+    font-style: italic;
+  }
+
+  .arrow {
+    stroke: #555;
+    stroke-width: 1.5;
+    fill: none;
+  }
+
+  .connector {
+    stroke: #555;
+    stroke-width: 1.5;
+    fill: none;
+  }
+</style>
