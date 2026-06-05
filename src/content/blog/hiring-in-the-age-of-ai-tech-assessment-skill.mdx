@@ -1,0 +1,112 @@
+---
+title: Hiring in the Age of AI
+description: How I encoded our take-home review into a Claude Code skill that does a fast, consistent first pass — and why, when AI writes the happy path for free, the bar shifts from "can they code" to "can they reason about architecture and trade-offs."
+pubDate: 2026-06-05
+tags: [Claude Code, Hiring, AI, Engineering Culture, Code Review]
+---
+
+The take-home coding assessment has survived for years on a simple premise: give a candidate a small spec, see if working software comes back. That premise is quietly broken now. A capable model will hand anyone a complete, cleanly-structured, well-documented solution to a small spec in an afternoon. The happy path is no longer a filter.
+
+So the interesting question isn't "did they use AI" — assume everyone does. It's "what's left to evaluate once the easy 80% is free?" This post is about a Claude Code skill I built to do the *first pass* of that evaluation, the parameters it scores on, how it stays consistent across candidates, and — most importantly — what it deliberately does **not** decide.
+
+## Why a skill, not a checklist in someone's head
+
+There's a structural reason a checklist in someone's head doesn't scale here: **we let candidates pick their own framework.** That freedom is the right call — a senior shouldn't be judged on whether they reach for the same tools we do — but it means no two submissions share a shape. One repo is a layered backend in one language or framework; the next is a different framework with an entirely different file layout, naming, and entry points. A human reviewer has to re-orient from scratch on every single repo, and that re-orientation is exactly where attention and consistency leak away.
+
+What you need is a consistent way to *analyze and traverse* the repo independently of whatever structure the candidate chose — a reviewer that maps the project first (where's the API, where's the domain logic, where's the data model, where's the view) and only then applies the same rubric to what it found. The skill does that mapping step every time, so framework freedom for the candidate doesn't turn into evaluation chaos for us.
+
+A skill fixes the mechanical part of that. It's a `SKILL.md` — a prompt written for Claude, not a human — that always applies the same rubric, always cites concrete `file:line` evidence instead of vibes, and produces the same report shape every time. Consistency is the whole point: the same work should earn the same verdict whether it's reviewed first or twentieth.
+
+The skill triggers when someone pastes a candidate repo and asks to review it. It clones the repo, maps the structure, verifies each required behavior against the actual source (not the README's claims), runs a couple of cheap audits, scores each dimension, and emits an internal scorecard.
+
+## The core insight: score the review layer, not the baseline
+
+Here's the parameter that reframes everything else. The skill is explicit that a complete, runnable, cleanly-layered solution is **the baseline an AI hands out for free — not a pass.**
+
+> Calibrate for the AI-assisted era. A thorough README, tidy boilerplate, a diagram, and scaffolded tests are now the *expected average* — AI hands these out for free, so they earn a solid baseline (≈6–7), not high marks. Reserve 8–10 for signal AI does NOT give you for free.
+
+What does AI *not* give you for free? Judgment on the things tutorials and prompts don't surface unprompted:
+
+- **Concurrency & atomicity** — two events for the same entity arriving at once must not double-count or skip. Atomic increments, row locks, `UPDATE … RETURNING` — not a bare read-then-write that still races.
+- **Idempotency / delivery semantics** — real-world events are at-least-once. Did they dedupe a retried event, or at least *name* it as a known gap?
+- **Indexes on the actual access patterns** — not just the primary key, but the columns the real queries filter and group on.
+- **Time correctness** — UTC storage, explicit timezone handling, no naive local-time bucketing.
+- **A genuine decision document** that argues *why*, not just *what*.
+
+So the skill's central instruction is to measure **how much senior review is visible on top of the AI baseline.** A submission can be complete, cleanly layered, and even *cleverly* correct on one point and still be a "No" if that review layer is absent.
+
+There's a subtle corollary it enforces hard: **silent omission is itself a negative.** Leaving concurrency unhandled *and unacknowledged* is worse than leaving it unhandled but flagged as a known limitation with a sketch of the fix. The acknowledgment is the senior signal. A candidate who names the gaps they left is showing you the exact judgment AI doesn't volunteer.
+
+## Good coding standards, made explicit
+
+The skill carries a checklist of engineering standards it probes every submission against — and crucially, it asks for *evidence* of each, citing `file:line`, rather than rewarding their mention in prose. These are general standards, nothing proprietary:
+
+- **Layering / separation of responsibility** — thin controllers, business logic in services/use-cases, persistence behind a repository, DTOs separate from controllers. A controller that builds raw queries, aggregates, and formats view-models inline is a hard violation.
+- **SOLID & dependency inversion** — depend on abstractions, inject collaborators, one responsibility per unit, no god-objects.
+- **Domain modeling** — the core rule encapsulated in one well-named place, not scattered or duplicated across layers.
+- **Persistence abstraction** — business logic not coupled to a specific store; the store should be swappable.
+- **Error handling & validation at boundaries** — explicit validation, meaningful errors, correct status codes, no swallowed exceptions.
+- **API design** — consistent resource-oriented contracts, correct status codes, pagination on collection reads, versioning considered.
+- **Configuration** — env-driven, no magic numbers, sane defaults.
+- **Type safety & modern idioms** — strict types, enums over stringly-typed values, immutability where natural.
+- **Testing depth** — unit tests on the domain logic, not only happy-path e2e.
+- **Security hygiene** — no committed secrets, input sanitization, mass-assignment protection.
+
+A nice detail that catches AI-scaffolded submissions: the testing rule has an **auto-cap**. If the test suite doesn't import the production module under test — a factory that re-implements the real service is verifying a parallel copy — testing is capped low. A configured test runner pointing at an *empty* test directory scores *worse* than no test setup at all, because it signals "scaffolded and abandoned."
+
+## How it stays consistent: scored dimensions and verdict bands
+
+The skill scores each dimension on a strict 1–10 scale where the anchors are fixed:
+
+| Score | Meaning |
+|-------|---------|
+| 9–10 | Exemplar — clean layering, concurrency-safe, well-tested, thoughtful trade-offs |
+| 7–8  | Clearly strong; solid architecture with only minor gaps |
+| 5–6  | *Works and meets the spec* but unremarkable — happy-path only |
+| 3–4  | Weak/partial; structural problems or missing required behavior |
+| 1–2  | Broken or absent |
+
+The single most important calibration line: **"it runs and does what was asked" is a 5–6, not a pass on its own.** Meeting the spec is the floor.
+
+Dimensions roll up into a weighted overall (architecture and correctness carry the most weight, since that's the role being hired for), which maps to a verdict band:
+
+| Overall | Verdict |
+|---------|---------|
+| ≥ 8.5 | Strong Pass |
+| 7.0–8.4 | Pass |
+| 6.2–6.9 | Borderline (lean Pass) |
+| 5.5–6.1 | Borderline (lean No) |
+| < 5.5 | No Pass |
+
+Splitting "Borderline" into lean-Hire and lean-No makes the output *actionable* for the panel instead of a flat "maybe" — and the lean direction is purely numeric, so the skill is told not to editorialize it.
+
+There are also a few **disqualifiers** that override everything, including any "excellence" bonus — a separation-of-responsibility violation, code that doesn't run, or a committed production secret. When one applies, the overall is capped regardless of what the weighted average would otherwise produce. Encoding the override arithmetic explicitly is what stops a polished submission from sliding past a structural problem on the strength of its README.
+
+## Retro-feeding the skill from real candidates
+
+This is the part I think is most useful and least obvious. A static rubric drifts away from reality the moment real submissions start arriving in shapes you didn't anticipate. So the skill carries **calibration anchors** — anonymized profiles of past submissions and the verdict they earned, with the reasoning.
+
+Every time a real review-plus-interview outcome teaches us something the rubric didn't capture — a false positive the skill rated too high, an AI-polished submission that collapsed at interview — that lesson gets distilled into a new anchor or a sharpened rule. The skill gets *more* calibrated to our actual bar over time, from real feedback, without any reviewer having to remember the precedent.
+
+Two guardrails keep this honest:
+
+1. **Anchors are patterns to recognize, not verdicts to inherit.** They describe a *past state* of a repo — candidates harden their submissions over time. The skill is told to audit the current code first and only let an anchor inform the band when the live evidence still supports it.
+2. **Never re-calibrate mid-batch.** When reviewing a cohort, the identical rubric is applied to every candidate, then a final comparison table and ranking. The bar doesn't move between candidate one and candidate ten.
+
+## The output, and where the human takes over
+
+The report is deliberately short — it's an internal artifact, not an essay. A verdict line with rationale, a requirements pass/partial/fail strip, evidence-backed strengths and concerns ordered by severity, the stack as a neutral note, and **interview follow-ups.**
+
+What happens next splits by verdict, and this is where the human stays firmly in charge. Every submission gets a manual review of the skill's verdict — the report is a recommendation, not a gate that auto-rejects anyone. But only the candidates who clear the bar advance to an **interview where they have to defend their own submission**, and that's where the follow-ups earn their keep. Borderline and No-Hire submissions are still read by a human to sanity-check the verdict, but they don't proceed to that interview round.
+
+So the follow-up questions matter most for exactly the candidates who move forward. When a submission shows a heavy AI fingerprint and thin personal-judgment signal, the skill is required to generate *ownership probes* — questions that force the candidate to defend specific choices in *their own* code: "walk me through your session flow," "why this pattern over that one," "what breaks first under 10× load," "which parts would you change and why."
+
+Because that's the line the skill cannot cross: **code review cannot prove a candidate understands their own code.** A near-total-AI submission can read as senior and collapse the moment someone asks the candidate to justify a decision. The skill's job is to *flag that risk and arm the interviewer with the probes* — not to settle it.
+
+## This does not replace the human review
+
+The skill is a fast, consistent, evidence-cited **first pass**. It reads more carefully than a rushed human reviewer, it never drifts mid-batch, and it surfaces the concrete gaps and the right interview questions. What it does not do is make the hire decision. Ownership, communication, how someone reasons under a follow-up question, whether they're honest about what the AI wrote and what they understood — none of that lives in the repo, and none of it is the skill's call.
+
+What's actually changed is the *filter*. When any candidate can ship working code, "can they code" stops being the discriminator. What's left — and what both the skill and the human interview are really probing — is judgment: can they reason about architecture, name the trade-offs they made, handle the cases AI doesn't hand you for free, and own the design when questioned? Honesty about AI use is a culture plus. Inability to explain the submitted code is the real disqualifier.
+
+The skill clears the noise so the humans can spend their time on the part that was always the actual job: evaluating how someone *thinks*.
