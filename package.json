@@ -19,6 +19,8 @@
     "@astrojs/mdx": "^4.0.0",
     "@astrojs/sitemap": "^3.7.1",
     "@astrojs/vercel": "^8.0.0",
+    "@fontsource/bebas-neue": "^5.2.7",
+    "@fontsource/open-sans": "^5.2.7",
     "astro": "^5.0.0"
   },
   "devDependencies": {
