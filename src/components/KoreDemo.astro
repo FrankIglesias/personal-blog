@@ -1,0 +1,633 @@
+---
+// Live, simplified previews of the scroll/CSS animations from the
+// head-kore-93 lab. Each variant is self-contained: the scroll-driven ones
+// run inside their own scroll container, so the reader scrolls *inside* the
+// box to scrub the animation. No JS — everything is native CSS, exactly like
+// the real site.
+interface Props {
+  demo: string;
+}
+const { demo } = Astro.props;
+---
+
+<figure class="kd-fig">
+  {demo === 'progress' && (
+    <div class="kd kd-scroll" data-demo="progress">
+      <div class="kd-bar" aria-hidden="true"></div>
+      <div class="kd-tall">
+        <p class="kd-mono">scroll inside this box ↓</p>
+        <p class="kd-big">93</p>
+        <p class="kd-mono kd-end">the bar up top tracks your scroll</p>
+      </div>
+    </div>
+  )}
+
+  {demo === 'colorflip' && (
+    <div class="kd kd-scroll" data-demo="colorflip">
+      <header class="kd-flipbar"><span>HEAD</span><span class="kd-mono">EST. 1950</span></header>
+      <div class="kd-flip-track">
+        <section class="kd-flip-panel kd-dark">DARK</section>
+        <section class="kd-flip-panel kd-light">LIGHT</section>
+        <section class="kd-flip-panel kd-lime">LIME</section>
+        <section class="kd-flip-panel kd-dark">DARK</section>
+      </div>
+    </div>
+  )}
+
+  {demo === 'entrance' && (
+    <div class="kd kd-entrance" data-demo="entrance" tabindex="0">
+      <p class="kd-mono e e1">ALL-MOUNTAIN / GRAPHENE SERIES</p>
+      <h3 class="e e2">KORE</h3>
+      <h3 class="e e3 kd-lime-t">93.</h3>
+      <p class="kd-claim e e4">Gram for gram, the lightest way to take the whole mountain apart.</p>
+      <div class="kd-levitate" aria-hidden="true"></div>
+      <span class="kd-hint kd-mono">hover / focus to replay</span>
+    </div>
+  )}
+
+  {demo === 'marquee' && (
+    <div class="kd kd-marquee" data-demo="marquee">
+      <div class="kd-marquee-track">
+        <span>156 — 163 — 170 — 177 — 184 — 191 —&nbsp;</span>
+        <span>156 — 163 — 170 — 177 — 184 — 191 —&nbsp;</span>
+      </div>
+    </div>
+  )}
+
+  {demo === 'wordreveal' && (
+    <div class="kd kd-scroll" data-demo="wordreveal">
+      <div class="kd-tall kd-words">
+        <p class="kd-mono">scroll ↓</p>
+        <h3 class="kd-line">
+          <span class="w w1">Light</span>
+          <span class="w w2">is&nbsp;not</span>
+          <span class="w w3">fragile.</span>
+          <span class="w w4 kd-lime-t">Light</span>
+          <span class="w w5 kd-lime-t">is&nbsp;fast.</span>
+        </h3>
+      </div>
+    </div>
+  )}
+
+  {demo === 'spotlight' && (
+    <div class="kd kd-scroll" data-demo="spotlight">
+      <div class="kd-tall kd-spot-tall">
+        <p class="kd-mono">scroll — watch the sheen sweep ↓</p>
+        <div class="kd-spot">
+          <span class="kd-spot-label kd-mono">TOPSHEET</span>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {demo === 'blueprint' && (
+    <div class="kd kd-scroll" data-demo="blueprint">
+      <div class="kd-tall kd-blu-tall">
+        <p class="kd-mono">scroll — the drawing inks itself ↓</p>
+        <svg class="kd-blu" viewBox="0 0 320 120" role="img" aria-label="Self-drawing ski outline">
+          <path class="bd bd-out" pathLength="1" d="M 20 60 C 18 40 40 34 70 34 L 250 34 C 280 34 302 44 308 60 C 302 76 280 86 250 86 L 70 86 C 40 86 18 80 20 60 Z" />
+          <line class="bd bd-dim" x1="20" y1="100" x2="308" y2="100" pathLength="1" />
+          <line class="bd bd-tick" x1="20" y1="94" x2="20" y2="106" pathLength="1" />
+          <line class="bd bd-tick" x1="308" y1="94" x2="308" y2="106" pathLength="1" />
+          <text class="bd-t" x="164" y="116" text-anchor="middle">1770 MM — 177</text>
+        </svg>
+      </div>
+    </div>
+  )}
+
+  {demo === 'showcase' && (
+    <div class="kd kd-scroll" data-demo="showcase">
+      <div class="kd-show-track">
+        <div class="kd-show-stage">
+          <div class="kd-show-glow" aria-hidden="true"></div>
+          <div class="kd-card kd-card-l"></div>
+          <div class="kd-card kd-card-r"></div>
+          <span class="kd-mono kd-show-hint">scroll to scrub ↓</span>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {demo === 'crossfade' && (
+    <div class="kd kd-scroll" data-demo="crossfade">
+      <div class="kd-cf-track">
+        <div class="kd-cf-stage">
+          <article class="cf cf1"><h4>Graphene.</h4><p>Thin, strong, torsionally honest.</p></article>
+          <article class="cf cf2"><h4>Karuba core.</h4><p>Damp, quiet, flyweight.</p></article>
+          <article class="cf cf3"><h4>Topless Tech.</h4><p>Raw carbon, no spare grams.</p></article>
+          <span class="kd-mono kd-cf-hint">scroll ↓</span>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {demo === 'traverse' && (
+    <div class="kd kd-scroll" data-demo="traverse">
+      <div class="kd-trav-track">
+        <div class="kd-trav-wrap">
+          <div class="kd-trav-rail">
+            <div class="kd-panel">ADVANCED</div>
+            <div class="kd-panel kd-panel-lime">FREERIDE</div>
+            <div class="kd-panel">FAST</div>
+            <div class="kd-panel kd-panel-end">ALL IN.</div>
+          </div>
+        </div>
+        <span class="kd-mono kd-trav-hint">scroll down → pans right ↓</span>
+      </div>
+    </div>
+  )}
+
+  {demo === 'specrows' && (
+    <div class="kd kd-scroll" data-demo="specrows">
+      <div class="kd-tall kd-rows">
+        <p class="kd-mono">scroll ↓</p>
+        <div class="kd-row"><span class="kd-mono">SIDECUT</span><strong>133 — 93 — 115</strong></div>
+        <div class="kd-row"><span class="kd-mono">RADIUS</span><strong>16.4 M</strong></div>
+        <div class="kd-row"><span class="kd-mono">WEIGHT</span><strong>≈ 1790 G</strong></div>
+        <div class="kd-row"><span class="kd-mono">LENGTHS</span><strong>156 — 191 CM</strong></div>
+      </div>
+    </div>
+  )}
+
+  {demo === 'cta' && (
+    <div class="kd kd-scroll" data-demo="cta">
+      <div class="kd-tall kd-cta-tall">
+        <p class="kd-mono">scroll ↓</p>
+        <div class="kd-cta-skis" aria-hidden="true"></div>
+        <h3 class="kd-cta-h">RIDE THE <span class="kd-lime-t">93</span></h3>
+      </div>
+    </div>
+  )}
+</figure>
+
+<style>
+  .kd-fig {
+    --ink: #0e1013;
+    --paper: #e8eae4;
+    --line: #272c31;
+    --muted: #8d97a0;
+    --lime: #d6f320;
+
+    margin: var(--spacing-lg) 0;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Archivo', var(--font-body);
+  }
+
+  .kd-mono {
+    font-family: ui-monospace, 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .kd-lime-t { color: var(--lime); }
+
+  /* shared scroll container — the reader scrubs by scrolling inside it */
+  .kd-scroll {
+    position: relative;
+    height: 340px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+
+  .kd-tall {
+    min-height: 900px;
+    padding: 2rem 1.5rem 60vh;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .kd-big {
+    font-family: 'Bebas Neue', var(--font-display);
+    font-size: 9rem;
+    line-height: 0.8;
+    margin: 30vh 0;
+    color: #1d2228;
+    -webkit-text-stroke: 1px var(--line);
+  }
+
+  .kd-end { color: var(--lime); }
+
+  /* ---- 1. scroll-progress bar : animation-timeline: scroll() ---- */
+  .kd[data-demo='progress'] .kd-bar {
+    position: sticky;
+    top: 0;
+    left: 0;
+    height: 4px;
+    background: var(--lime);
+    transform-origin: left;
+    transform: scaleX(0);
+    z-index: 5;
+    animation: kd-grow linear;
+    animation-timeline: scroll(nearest block);
+  }
+
+  @keyframes kd-grow { to { transform: scaleX(1); } }
+
+  /* ---- 2. color flip : timeline-scope + mix-blend-mode + view-timeline ---- */
+  /* hoist the name to the common ancestor so the preceding-sibling bar can see it */
+  .kd[data-demo='colorflip'] { scrollbar-width: thin; timeline-scope: --kdflip; }
+  .kd-flipbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem 1rem;
+    font-family: 'Bebas Neue', var(--font-display);
+    letter-spacing: 0.05em;
+    mix-blend-mode: difference;
+    color: var(--paper);
+    animation: kd-flip linear both;
+    animation-timeline: --kdflip;
+  }
+  .kd-flip-track {
+    view-timeline: --kdflip block;
+  }
+  .kd-flip-panel {
+    height: 240px;
+    display: grid;
+    place-items: center;
+    font-family: 'Bebas Neue', var(--font-display);
+    font-size: 3rem;
+    letter-spacing: 0.1em;
+  }
+  .kd-dark { background: var(--ink); color: #2a2f35; }
+  .kd-light { background: var(--paper); color: #c2c6bd; }
+  .kd-lime { background: var(--lime); color: #b9d400; }
+  @keyframes kd-flip {
+    0%, 32% { mix-blend-mode: difference; color: var(--paper); }
+    34%, 64% { mix-blend-mode: normal; color: var(--ink); }
+    66%, 100% { mix-blend-mode: difference; color: var(--paper); }
+  }
+
+  /* ---- 3. time-based entrance + levitate (hover/focus to replay) ---- */
+  .kd-entrance {
+    position: relative;
+    padding: 2rem 1.6rem 2.6rem;
+    min-height: 340px;
+  }
+  .kd-entrance h3 {
+    font-family: 'Bebas Neue', var(--font-display);
+    font-size: 3.4rem;
+    line-height: 0.82;
+    margin: 0;
+  }
+  .kd-claim { color: var(--muted); max-width: 32ch; margin: 1rem 0 0; }
+  .e {
+    animation: kd-rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .e1 { animation-delay: 0.05s; }
+  .e2 { animation-delay: 0.2s; }
+  .e3 { animation-delay: 0.32s; }
+  .e4 { animation-delay: 0.5s; }
+  /* swap to an identical keyframe set on hover/focus → replays */
+  .kd-entrance:hover .e,
+  .kd-entrance:focus .e { animation-name: kd-rise2; }
+  @keyframes kd-rise {
+    from { opacity: 0; transform: translateY(28px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes kd-rise2 {
+    from { opacity: 0; transform: translateY(28px); }
+    to { opacity: 1; transform: none; }
+  }
+  .kd-levitate {
+    position: absolute;
+    right: 1.4rem;
+    bottom: 1.4rem;
+    width: 56px;
+    height: 120px;
+    border-radius: 8px;
+    background: linear-gradient(160deg, var(--lime), #7d8e12);
+    box-shadow: 14px 22px 22px rgb(0 0 0 / 45%);
+    animation: kd-levitate 4.5s ease-in-out infinite;
+  }
+  @keyframes kd-levitate { 50% { translate: 0 -12px; } }
+  .kd-hint {
+    position: absolute;
+    top: 0.8rem;
+    right: 1rem;
+  }
+
+  /* ---- 4. marquee : infinite time-based slide ---- */
+  .kd-marquee {
+    overflow: clip;
+    padding: 1.4rem 0;
+    border-block: 1px solid var(--line);
+  }
+  .kd-marquee-track {
+    display: flex;
+    width: max-content;
+    animation: kd-slide 14s linear infinite;
+  }
+  .kd-marquee-track span {
+    font-family: 'Bebas Neue', var(--font-display);
+    font-size: 1.6rem;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    color: var(--line);
+    -webkit-text-stroke: 1px var(--muted);
+  }
+  @keyframes kd-slide { to { transform: translateX(-50%); } }
+
+  /* ---- 5. word reveal : view() + animation-range entry ---- */
+  .kd-words { gap: 0; }
+  .kd-line {
+    font-family: 'Bebas Neue', var(--font-display);
+    font-size: 2.6rem;
+    line-height: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.5rem;
+    margin: 24vh 0 40vh;
+  }
+  .kd-line .w {
+    animation: kd-word-in linear both;
+    animation-timeline: view(nearest);
+  }
+  .kd-line .w1 { animation-range: entry 5% entry 45%; }
+  .kd-line .w2 { animation-range: entry 15% entry 55%; }
+  .kd-line .w3 { animation-range: entry 25% entry 65%; }
+  .kd-line .w4 { animation-range: entry 40% entry 80%; }
+  .kd-line .w5 { animation-range: entry 50% entry 90%; }
+  @keyframes kd-word-in {
+    from { opacity: 0.25; transform: translateY(0.4em); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* ---- 6. spotlight sheen : mask + view() ---- */
+  .kd-spot-tall { min-height: 1000px; }
+  .kd-spot {
+    position: relative;
+    width: 80px;
+    height: 360px;
+    margin: 18vh auto 40vh;
+    border-radius: 10px;
+    background: linear-gradient(150deg, #20262d, #0c0e11);
+    display: grid;
+    place-items: end center;
+    padding-bottom: 1rem;
+    overflow: hidden;
+  }
+  .kd-spot-label { writing-mode: vertical-rl; }
+  .kd-spot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      closest-side,
+      rgb(255 255 255 / 80%) 0%,
+      rgb(255 255 255 / 30%) 45%,
+      transparent 100%
+    ) no-repeat;
+    background-size: 220% 40%;
+    mix-blend-mode: screen;
+    animation: kd-sheen linear both;
+    animation-timeline: view(nearest);
+  }
+  @keyframes kd-sheen {
+    from { background-position: 120% -30%; }
+    to { background-position: -30% 130%; }
+  }
+
+  /* ---- 7. self-drawing blueprint : stroke-dashoffset + view-timeline ---- */
+  .kd-blu-tall { min-height: 1100px; }
+  .kd-blu {
+    width: 100%;
+    max-width: 320px;
+    margin: 26vh auto 46vh;
+    overflow: visible;
+    view-timeline: --kdblu block;
+  }
+  .kd-blu .bd {
+    fill: none;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: kd-draw linear both;
+    animation-timeline: --kdblu;
+  }
+  .kd-blu .bd-out { stroke: var(--paper); stroke-width: 2; animation-range: cover 8% cover 48%; }
+  .kd-blu .bd-dim { stroke: var(--lime); stroke-width: 1.5; animation-range: cover 35% cover 62%; }
+  .kd-blu .bd-tick { stroke: var(--lime); stroke-width: 2.5; animation-range: cover 50% cover 70%; }
+  .kd-blu .bd-t {
+    fill: var(--paper);
+    font-family: ui-monospace, 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    opacity: 0;
+    animation: kd-fade-in linear both;
+    animation-timeline: --kdblu;
+    animation-range: cover 60% cover 80%;
+  }
+  @keyframes kd-draw { to { stroke-dashoffset: 0; } }
+  @keyframes kd-fade-in { to { opacity: 1; } }
+
+  /* ---- 8. pinned scrub sequence : sticky + view-timeline multi-keyframe ---- */
+  .kd[data-demo='showcase'] { height: 360px; }
+  .kd-show-track {
+    height: 1400px;
+    view-timeline: --kdshow block;
+  }
+  .kd-show-stage {
+    position: sticky;
+    top: 0;
+    height: 360px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: radial-gradient(70% 60% at 50% 50%, #14181d, #0a0c0e 70%);
+  }
+  .kd-show-glow {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgb(214 243 32 / 25%), transparent 65%);
+    opacity: 0;
+    animation: kd-show-glow linear both;
+    animation-timeline: --kdshow;
+  }
+  .kd-card {
+    position: absolute;
+    width: 70px;
+    height: 210px;
+    border-radius: 8px;
+    background: linear-gradient(160deg, var(--lime), #7d8e12);
+    box-shadow: 0 20px 26px rgb(0 0 0 / 55%);
+    will-change: transform;
+    animation: linear both;
+    animation-timeline: --kdshow;
+  }
+  .kd-card-l { animation-name: kd-card-l; }
+  .kd-card-r { animation-name: kd-card-r; background: linear-gradient(160deg, #3a4250, #11151b); }
+  @keyframes kd-card-l {
+    0% { transform: perspective(700px) translateX(0) rotateX(56deg) scale(0.85); }
+    45%, 55% { transform: perspective(700px) translateX(0) rotateX(0deg) scale(1); }
+    80%, 100% { transform: perspective(700px) translateX(-60px) rotate(-10deg) scale(1); }
+  }
+  @keyframes kd-card-r {
+    0% { transform: perspective(700px) translateX(0) rotateX(56deg) scale(0.85); }
+    45%, 55% { transform: perspective(700px) translateX(0) rotateX(0deg) scale(1); }
+    80%, 100% { transform: perspective(700px) translateX(60px) rotate(10deg) scale(1); }
+  }
+  @keyframes kd-show-glow {
+    0%, 60% { opacity: 0; transform: scale(1); }
+    85%, 100% { opacity: 1; transform: scale(1.15); }
+  }
+  .kd-show-hint { position: absolute; bottom: 0.8rem; }
+
+  /* ---- 9. crossfade slides : sticky + opacity sequence ---- */
+  .kd[data-demo='crossfade'] { height: 320px; }
+  .kd-cf-track {
+    height: 1200px;
+    view-timeline: --kdcf block;
+  }
+  .kd-cf-stage {
+    position: sticky;
+    top: 0;
+    height: 320px;
+    padding: 2rem 1.6rem;
+    overflow: hidden;
+  }
+  .cf {
+    position: absolute;
+    inset: 2rem 1.6rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    opacity: 0;
+    animation: linear both;
+    animation-timeline: --kdcf;
+  }
+  .cf h4 { font-family: 'Bebas Neue', var(--font-display); font-size: 2.4rem; margin: 0; }
+  .cf p { color: var(--muted); margin: 0.6rem 0 0; }
+  .cf1 { animation-name: kd-cf1; }
+  .cf2 { animation-name: kd-cf2; }
+  .cf3 { animation-name: kd-cf3; }
+  @keyframes kd-cf1 {
+    0%, 22% { opacity: 1; transform: none; }
+    34%, 100% { opacity: 0; transform: translateY(-30px); }
+  }
+  @keyframes kd-cf2 {
+    0%, 26% { opacity: 0; transform: translateY(40px); }
+    40%, 60% { opacity: 1; transform: none; }
+    72%, 100% { opacity: 0; transform: translateY(-30px); }
+  }
+  @keyframes kd-cf3 {
+    0%, 66% { opacity: 0; transform: translateY(40px); }
+    78%, 100% { opacity: 1; transform: none; }
+  }
+  .kd-cf-hint { position: absolute; bottom: 0.8rem; right: 1.6rem; }
+
+  /* ---- 10. horizontal traverse : sticky + translateX ---- */
+  .kd[data-demo='traverse'] { height: 320px; }
+  .kd-trav-track {
+    height: 1300px;
+    view-timeline: --kdtrav block;
+  }
+  .kd-trav-wrap {
+    position: sticky;
+    top: 0;
+    height: 320px;
+    overflow: hidden;
+  }
+  .kd-trav-rail {
+    display: flex;
+    width: max-content;
+    height: 100%;
+    animation: kd-pan linear both;
+    animation-timeline: --kdtrav;
+  }
+  .kd-panel {
+    width: 100%;
+    flex: 0 0 100%;
+    display: grid;
+    place-items: center;
+    font-family: 'Bebas Neue', var(--font-display);
+    font-size: 3rem;
+    letter-spacing: 0.06em;
+    border-right: 1px solid var(--line);
+  }
+  /* the rail is 4 panels wide; container shows one → pan by 3 widths */
+  .kd-panel-lime { background: var(--lime); color: var(--ink); }
+  .kd-panel-end { background: #14181d; }
+  @keyframes kd-pan { to { transform: translateX(-300%); } }
+  .kd-trav-hint { position: absolute; bottom: 0.8rem; left: 1.6rem; z-index: 2; }
+
+  /* ---- 11. spec rows stagger : view() entry ---- */
+  .kd-rows { gap: 0.4rem; }
+  .kd-row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--line);
+    animation: kd-row-in linear both;
+    animation-timeline: view(nearest);
+    animation-range: entry 20% cover 15%;
+  }
+  .kd-row:first-of-type { margin-top: 26vh; }
+  .kd-row:last-of-type { margin-bottom: 40vh; }
+  .kd-row strong {
+    font-family: 'Bebas Neue', var(--font-display);
+    font-size: 1.5rem;
+    letter-spacing: 0.03em;
+  }
+  @keyframes kd-row-in {
+    from { opacity: 0; transform: translateX(-24px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* ---- 12. cta reveal + glow : view() entry ---- */
+  .kd-cta-tall { min-height: 1000px; align-items: center; text-align: center; }
+  .kd-cta-skis {
+    width: 90px;
+    height: 240px;
+    margin: 22vh auto 2rem;
+    border-radius: 10px;
+    background: linear-gradient(160deg, var(--lime), #7d8e12);
+    animation: kd-cta-in linear both;
+    animation-timeline: view(nearest);
+    animation-range: entry 5% entry 60%;
+  }
+  .kd-cta-h {
+    font-family: 'Bebas Neue', var(--font-display);
+    font-size: 3rem;
+    margin: 0 0 40vh;
+  }
+  @keyframes kd-cta-in {
+    from { opacity: 0; transform: translateY(40px); filter: drop-shadow(0 0 0 transparent); }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: drop-shadow(0 16px 12px rgb(214 243 32 / 45%)) drop-shadow(0 36px 30px rgb(214 243 32 / 22%));
+    }
+  }
+
+  /* respect reduced motion — freeze to a sensible end state */
+  @media (prefers-reduced-motion: reduce) {
+    .kd-fig * { animation: none !important; }
+    .kd[data-demo='progress'] .kd-bar { transform: scaleX(0.4); }
+    .kd-line .w, .kd-row, .kd-cta-skis { opacity: 1; transform: none; }
+    .kd-blu .bd { stroke-dashoffset: 0; }
+    .kd-blu .bd-t { opacity: 1; }
+    .cf2, .cf3, .kd-card-r { opacity: 1; }
+  }
+
+  @media (width <= 640px) {
+    .kd-big { font-size: 6rem; }
+    .kd-line { font-size: 2rem; }
+    .kd-panel { font-size: 2.2rem; }
+  }
+</style>

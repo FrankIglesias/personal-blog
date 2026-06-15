@@ -1,0 +1,329 @@
+---
+title: Twelve Scroll Animations, Zero JavaScript
+description: A teardown of head-kore-93 — a ski-marketing concept page where every motion, from the scroll progress bar to a pinned cinematic ski sequence, runs on native CSS scroll-driven timelines. Each animation is rebuilt here as a live, simplified preview you can scrub yourself.
+pubDate: 2026-06-15
+tags: [CSS, Animations, Scroll-driven, Frontend, Vercel]
+---
+
+import KoreDemo from '../../components/KoreDemo.astro';
+
+I built [**HEAD Kore 93**](https://head-kore-93.vercel.app/) as a lab for one question: how far can scroll-driven storytelling go in *pure CSS*? The production build ships **one HTML file and one stylesheet — no JavaScript at all**. No `IntersectionObserver`, no scroll listeners, no animation library. Every motion you see is a native CSS scroll-driven timeline.
+
+The repo is [FrankIglesias/head-kore-93](https://github.com/FrankIglesias/head-kore-93). This post walks through all twelve animations on the page. For each one there's a **live, simplified preview embedded right here** — the scroll-driven demos are real CSS scroll animations running inside a little scroll box, so scroll *inside the box* to scrub them. Then I show the trimmed-down CSS and explain how the real version differs.
+
+## The three primitives
+
+Almost everything here is built from four pieces of modern CSS. Worth pinning down before the teardown:
+
+| Primitive | What it does |
+|---|---|
+| `animation-timeline: scroll()` | Drives an animation by a **scroll container's progress** (0% at top, 100% at bottom) instead of by time. |
+| `animation-timeline: view()` | Drives an animation by **an element's progress through the viewport** — enters from the bottom, exits at the top. |
+| `view-timeline` / `scroll-timeline` + `timeline-scope` | Names a timeline on one element so *other* elements — even ancestors — can attach to it. |
+| `animation-range` | Restricts an animation to a slice of its timeline, e.g. `entry 25% entry 65%`. This is what lets you stagger and choreograph. |
+
+The mental shift: an `@keyframes` block stops being "what happens over time" and becomes "what happens over distance." You write the same keyframes you always have; you just hand them a *timeline* that happens to be a scrollbar.
+
+> Browser support note: scroll-driven timelines are in Chromium and Firefox today; Safari is still catching up. The whole site is built so that without timeline support — and for anyone with `prefers-reduced-motion: reduce` — you get the full, readable, static page. Motion is an enhancement, never a dependency.
+
+## 1. The scroll progress bar
+
+The lime hairline across the top of the viewport. The simplest possible scroll animation, and a perfect first example: one keyframe, one timeline, no range math.
+
+<KoreDemo demo="progress" />
+
+```css
+.progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--lime);
+  transform-origin: left;
+  transform: scaleX(0);
+  animation: grow linear;
+  animation-timeline: scroll(root block);
+}
+@keyframes grow {
+  to { transform: scaleX(1); }
+}
+```
+
+`scroll(root block)` says: *use the document root's vertical scroll as my clock.* At 0% scroll the bar is `scaleX(0)`; at 100% it's `scaleX(1)`. No duration — the timeline replaces it entirely. In the preview above I use `scroll(nearest block)` so it binds to the demo's own scroll box instead of the page. Animating `transform` (not `width`) keeps it on the compositor, so it stays buttery even while everything else on the page is moving.
+
+## 2. The top-bar colour flip
+
+The header reads `HEAD` in white over dark sections, flips to dark ink as it crosses the bright lime panel in the horizontal traverse, then flips back. This one is sneaky, because the bar needs to react to a section that lives *much further down the DOM*. Two tricks combine: `mix-blend-mode: difference` and a **named timeline reached across the tree** with `timeline-scope`.
+
+<KoreDemo demo="colorflip" />
+
+```css
+body { timeline-scope: --trav; }     /* hoist the name up to a common ancestor */
+
+.traverse { view-timeline: --trav block; }   /* defined way down here */
+
+.topbar {
+  position: fixed;
+  mix-blend-mode: difference;
+  animation: topbar-lime linear both;
+  animation-timeline: --trav;        /* a fixed header attaches to a section's timeline */
+  animation-range: contain;
+}
+@keyframes topbar-lime {
+  0%,  49.9% { mix-blend-mode: difference; color: var(--paper); }
+  50%, 74.9% { mix-blend-mode: normal;     color: var(--ink); }
+  75%, 100%  { mix-blend-mode: difference; color: var(--paper); }
+}
+```
+
+`timeline-scope: --trav` on `body` lets a name *declared* on `.traverse` be *seen* by the fixed `.topbar` — without it, a timeline name is only visible to descendants. `mix-blend-mode: difference` is the other half: white-on-dark inverts to readable, and the keyframes flip to a normal blend over the lime panel where difference would look muddy. The preview uses a view-timeline on a track of coloured panels to drive the same flip.
+
+## 3. The hero entrance
+
+Kicker, title lines, and claim rise and fade in on a staggered cascade when the page loads. This is the one block of motion that is **not** scroll-driven — it's a classic time-based animation, because it should fire once on arrival regardless of scrolling.
+
+<KoreDemo demo="entrance" />
+
+```css
+.hero-line {
+  animation: rise 0.9s 0.22s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.hero-num   { animation-delay: 0.34s; }
+.hero-claim { animation-delay: 0.5s; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(34px); }
+  to   { opacity: 1; transform: none; }
+}
+```
+
+The cascade is nothing but increasing `animation-delay`s on a shared keyframe. The skis also get an infinite `levitate` loop (`translate: 0 -14px` at the 50% mark) with a negative delay on the second ski so the pair drifts out of phase. Hover or focus the preview to replay the entrance — a CSS-only "replay" done by swapping to an identical second keyframe name on `:hover`.
+
+## 4. The length marquee
+
+The scrolling ticker of available ski lengths in the footer CTA. The other purely time-based animation, and the classic seamless-loop trick.
+
+<KoreDemo demo="marquee" />
+
+```css
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: slide 26s linear infinite;
+}
+@keyframes slide {
+  to { transform: translateX(-50%); }
+}
+```
+
+The content is duplicated, then the track translates exactly `-50%` — by the time the first copy has fully left, the second copy sits precisely where the first began, so the loop is invisible. `width: max-content` keeps everything on one row.
+
+## 5. The statement word reveal
+
+"Light is not fragile. Light is fast." — each word lifts and sharpens as the line scrolls up into view. This is the cleanest demonstration of `view()` plus `animation-range`: the choreography is *entirely* in the ranges, not the keyframes.
+
+<KoreDemo demo="wordreveal" />
+
+```css
+.statement-line .w {
+  animation: word-in linear both;
+  animation-timeline: view();
+}
+.w1 { animation-range: entry 5%  entry 45%; }
+.w2 { animation-range: entry 15% entry 55%; }
+.w3 { animation-range: entry 25% entry 65%; }
+.w4 { animation-range: entry 40% entry 80%; }
+.w5 { animation-range: entry 50% entry 90%; }
+
+@keyframes word-in {
+  from { opacity: 0.5; transform: translateY(0.35em); }
+  to   { opacity: 1;   transform: none; }
+}
+```
+
+Every word shares one two-keyframe animation. The stagger comes only from sliding each word's `animation-range` later into the `entry` phase (the window while the element crosses *into* the viewport). Want a faster or slower cascade? Adjust the percentages — you never touch the keyframes.
+
+## 6. The spotlight sheen
+
+In the statement section, a ski tip sits behind the text and a specular highlight sweeps across it as you scroll. It's a moving `radial-gradient` clipped to the ski's silhouette with `mask-image`, scrubbed by `view()`.
+
+<KoreDemo demo="spotlight" />
+
+```css
+.statement-tip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(closest-side,
+    rgb(255 255 255 / 75%) 0%, rgb(255 255 255 / 32%) 45%, transparent 100%) no-repeat;
+  background-size: 280% 48%;
+  mix-blend-mode: screen;
+  mask-image: url("/images/kore93-tip.webp");   /* clip the glow to the ski */
+  animation: spotlight linear both;
+  animation-timeline: view();
+}
+@keyframes spotlight {
+  from { background-position: 130% -25%; }
+  to   { background-position: -30% 70%; }
+}
+```
+
+The trick is that the animated property is `background-position`, not transform or opacity — the highlight is a small gradient *sliding across a larger box*, and `mask-image` keeps it inside the ski shape so it reads as light raking over a real surface. The preview uses the same gradient-position sweep on a plain panel.
+
+## 7. The self-drawing blueprint
+
+A dimensioned technical drawing of the ski — outline, sidecut callouts, dimension lines, then labels — inks itself onto a grid as you scroll past, then the construction lines fade so only the clean drawing remains. This is my favourite, and it leans on an underused SVG feature: `pathLength`.
+
+<KoreDemo demo="blueprint" />
+
+```css
+.blu { view-timeline: --blu block; }
+
+.blu .d {
+  stroke-dasharray: 1;          /* with pathLength="1", the dash = the whole path */
+  stroke-dashoffset: 1;         /* ...pushed fully "off" → invisible */
+  animation: draw linear both;
+  animation-timeline: --blu;
+}
+@keyframes draw { to { stroke-dashoffset: 0; } }   /* draw to 0 → fully inked */
+
+/* each layer inks during a different slice of the section */
+.blu .d-outline { animation-range: cover 0%  cover 41%; }
+.blu .d-dim     { animation-range: cover 15% cover 47%; }
+.blu .d-tick    { animation-range: cover 27% cover 52%; }
+```
+
+Setting `pathLength="1"` on every SVG path normalises its length to exactly `1`, regardless of real geometry — so `stroke-dasharray: 1; stroke-dashoffset: 1` means "one dash the length of the whole path, offset entirely out of sight." Animating the offset to `0` draws it on. Because the lengths are normalised, the outline and a tiny tick mark draw at the same *rate* relative to their own length, and staggering their `animation-range`s makes the drawing assemble in a believable order: outline → dimensions → ticks → labels. In the real version a second animation (`lines-out`) then fades the dimension scaffolding away, and the ski photo cross-fades in over the outline.
+
+## 8. The pinned cinematic sequence
+
+The showcase: the section pins to the viewport while a pair of skis tilts from a flat 3D plane up to face-on, splits apart, then flips from topsheet to base — all scrubbed by scroll. This is the most cinematic moment and the pattern does the heavy lifting: a **tall section + a sticky child + a `view-timeline`**.
+
+<KoreDemo demo="showcase" />
+
+```css
+.showcase {
+  height: 640svh;                /* tall section = the scroll "runway" */
+  view-timeline: --show block;
+}
+.show-stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;                /* pinned frame the action plays inside */
+}
+.ski-l {
+  animation: ski-l-seq linear both;
+  animation-timeline: --show;
+  animation-range: contain;      /* run only while the stage is fully pinned */
+}
+@keyframes ski-l-seq {
+  0%          { transform: perspective(1100px) rotateX(58deg) scale(0.88); }
+  42.8%,51.6% { transform: perspective(1100px) rotateX(0deg)  scale(1.04); }
+  62.8%,71.2% { transform: translateX(calc(-1 * var(--split))) rotate(-11deg); }
+  74.4%,100%  { transform: ...scaleX(0); }   /* edge-on, hands off to the base ski */
+}
+```
+
+The section is `640svh` tall but the stage inside is `position: sticky` — so the stage holds still on screen for six viewport-heights of scrolling while `--show` advances from 0 to 100%. `animation-range: contain` means the keyframes only run during the span where the sticky element is fully pinned, so the action starts when it locks and finishes before it releases. The flip itself is a trick: each ski scales its `scaleX` to `0` (turning edge-on, infinitely thin) right as a base-view ski scales *up* from `0` in the same spot — a topsheet-to-base flip with no 3D model, just two flat images handing off. The preview uses two cards doing the tilt-and-split beat.
+
+## 9. The construction crossfade
+
+Three construction stories — Graphene, Karuba core, Topless Tech — crossfade in the copy column while action photos crossfade in lockstep beside them, the whole thing pinned. Same pin-and-scrub skeleton as the showcase, but the choreography is a relay of overlapping opacity windows.
+
+<KoreDemo demo="crossfade" />
+
+```css
+.build { height: 380svh; view-timeline: --build block; }
+.build-stage { position: sticky; top: 0; height: 100svh; }
+
+.bs { opacity: 0; animation: linear both; animation-timeline: --build; animation-range: contain; }
+.bs:nth-child(1) { animation-name: bs1-seq; }
+.bs:nth-child(2) { animation-name: bs2-seq; }
+.bs:nth-child(3) { animation-name: bs3-seq; }
+
+@keyframes bs2-seq {
+  0%,   26.7% { opacity: 0; transform: translateY(48px); }
+  38.4%,61.6% { opacity: 1; transform: none; }       /* hold in the middle third */
+  70.9%,100%  { opacity: 0; transform: translateY(-36px); }
+}
+```
+
+Each slide's keyframes have a held plateau (`38.4%`–`61.6%` above) where it sits fully visible, with the rise-in and fall-out on either side. Stagger those plateaus across the three slides and you get a clean relay: slide 2 fades up exactly as slide 1 fades out. The photo column runs a parallel set of keyframes on the same `--build` timeline, so copy and image are frame-locked by construction, not by JavaScript syncing two scroll handlers.
+
+## 10. The horizontal traverse
+
+A track of ride-attribute panels — Advanced, Freeride, Fast, Powder, All In — that scrolls *sideways* while the page scrolls *down*. The canonical "horizontal scroll section," and it's the same pin trick aimed at the X axis. (This is also the section whose `--trav` timeline drives the top-bar flip from #2.)
+
+<KoreDemo demo="traverse" />
+
+```css
+.traverse { height: 500vh; view-timeline: --trav block; }
+.track-wrap { position: sticky; top: 0; height: 100svh; overflow: clip; }
+
+.track {
+  display: flex;
+  width: max-content;
+  animation: track-pan linear both;
+  animation-timeline: --trav;
+  animation-range: contain;
+}
+@keyframes track-pan {
+  to { transform: translateX(calc(-100% + 100vw)); }
+}
+```
+
+Vertical scroll through the tall `.traverse` section advances `--trav`, which translates the flex rail horizontally. The `translateX(calc(-100% + 100vw))` end value means "pan left until the last panel's right edge meets the viewport's right edge" — so it stops exactly when the final panel is flush, no overscroll. The reduced-motion fallback just stacks the panels vertically and drops the pin entirely.
+
+## 11. The spec-row stagger
+
+The spec sheet rows slide in from the left, one after another, as the table scrolls into view. A small touch, but it shows that `view()` is fine for ordinary content too, not just hero theatrics — and you don't need to name a thing.
+
+<KoreDemo demo="specrows" />
+
+```css
+.spec-row {
+  animation: row-in linear both;
+  animation-timeline: view();
+  animation-range: entry 35% cover 12%;
+}
+@keyframes row-in {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: none; }
+}
+```
+
+Because each row is a separate element entering the viewport at a slightly different scroll position, they naturally stagger — no per-row delays or `:nth-child` math needed. The viewport itself is the metronome. `entry 35% cover 12%` starts each row a third of the way into its entrance and finishes just after it's fully on screen.
+
+## 12. The closing CTA
+
+"Ride the 93." The bindings shot rises in with a lime glow blooming underneath it as the footer enters view. A straightforward `view()` reveal, but it animates `filter` to grow the glow — the kind of property people forget is animatable.
+
+<KoreDemo demo="cta" />
+
+```css
+.cta-skis {
+  animation: cta-in linear both;
+  animation-timeline: view();
+  animation-range: entry 5% entry 55%;
+}
+@keyframes cta-in {
+  from { opacity: 0; transform: translateY(44px); }
+  to   {
+    opacity: 1; transform: none;
+    filter: drop-shadow(0 20px 12px rgb(214 243 32 / 45%))
+            drop-shadow(0 48px 40px rgb(214 243 32 / 22%));
+  }
+}
+```
+
+Two stacked `drop-shadow()` filters in lime grow as the element settles, so the product looks like it's lighting the floor beneath it. Animating `filter` is more expensive than transform/opacity, but here it runs once on a single element as the section arrives, so the cost is invisible.
+
+## What I took away from building it
+
+A few things crystallised after wiring up a dozen of these:
+
+- **Keyframes describe state; timelines and ranges describe choreography.** Most of the "design" work was in `animation-range` percentages, not in the `@keyframes`. Once you internalise that split, complex sequences get easy to reason about.
+- **The pin-and-scrub pattern is the workhorse.** Tall section + `position: sticky` child + `view-timeline` is behind the showcase, the construction crossfade, and the horizontal traverse — three completely different effects from one skeleton.
+- **Named timelines + `timeline-scope` are the escape hatch** for when an element needs to react to something elsewhere in the tree, like a fixed header responding to a section far below it.
+- **Designing the fallback first is liberating.** Because the page is fully readable with zero animation, I could be aggressive with motion knowing nothing breaks for `prefers-reduced-motion` users or browsers without timeline support. The animation layer is genuinely optional.
+
+The whole thing is one stylesheet and zero JavaScript. If you want to poke at the real keyframes, it's all in [the repo](https://github.com/FrankIglesias/head-kore-93) — or [scroll the live page](https://head-kore-93.vercel.app/) and watch all twelve fire in sequence.
