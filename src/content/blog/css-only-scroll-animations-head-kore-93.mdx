@@ -57,15 +57,18 @@ The header reads `HEAD` in white over dark sections, flips to dark ink as it cro
 <KoreDemo demo="colorflip" />
 
 ```css
-body { timeline-scope: --trav; }     /* hoist the name up to a common ancestor */
+/* hoist the name up to a common ancestor */
+body { timeline-scope: --trav; }
 
-.traverse { view-timeline: --trav block; }   /* defined way down here */
+/* the timeline is declared way down here */
+.traverse { view-timeline: --trav block; }
 
 .topbar {
   position: fixed;
   mix-blend-mode: difference;
+  /* a fixed header attaches to a section's timeline */
   animation: topbar-lime linear both;
-  animation-timeline: --trav;        /* a fixed header attaches to a section's timeline */
+  animation-timeline: --trav;
   animation-range: contain;
 }
 @keyframes topbar-lime {
@@ -157,7 +160,8 @@ In the statement section, a ski tip sits behind the text and a specular highligh
     rgb(255 255 255 / 75%) 0%, rgb(255 255 255 / 32%) 45%, transparent 100%) no-repeat;
   background-size: 280% 48%;
   mix-blend-mode: screen;
-  mask-image: url("/images/kore93-tip.webp");   /* clip the glow to the ski */
+  /* clip the glow to the ski silhouette */
+  mask-image: url("/images/kore93-tip.webp");
   animation: spotlight linear both;
   animation-timeline: view();
 }
@@ -179,12 +183,14 @@ A dimensioned technical drawing of the ski — outline, sidecut callouts, dimens
 .blu { view-timeline: --blu block; }
 
 .blu .d {
-  stroke-dasharray: 1;          /* with pathLength="1", the dash = the whole path */
-  stroke-dashoffset: 1;         /* ...pushed fully "off" → invisible */
+  /* pathLength="1" → one dash spans the path, offset fully out of sight */
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
   animation: draw linear both;
   animation-timeline: --blu;
 }
-@keyframes draw { to { stroke-dashoffset: 0; } }   /* draw to 0 → fully inked */
+/* drawing the offset back to 0 inks the path on */
+@keyframes draw { to { stroke-dashoffset: 0; } }
 
 /* each layer inks during a different slice of the section */
 .blu .d-outline { animation-range: cover 0%  cover 41%; }
@@ -202,24 +208,28 @@ The showcase: the section pins to the viewport while a pair of skis tilts from a
 
 ```css
 .showcase {
-  height: 640svh;                /* tall section = the scroll "runway" */
+  /* tall section = the scroll "runway" */
+  height: 640svh;
   view-timeline: --show block;
 }
 .show-stage {
   position: sticky;
   top: 0;
-  height: 100svh;                /* pinned frame the action plays inside */
+  /* pinned frame the action plays inside */
+  height: 100svh;
 }
 .ski-l {
   animation: ski-l-seq linear both;
   animation-timeline: --show;
-  animation-range: contain;      /* run only while the stage is fully pinned */
+  /* run only while the stage is fully pinned */
+  animation-range: contain;
 }
 @keyframes ski-l-seq {
   0%          { transform: perspective(1100px) rotateX(58deg) scale(0.88); }
   42.8%,51.6% { transform: perspective(1100px) rotateX(0deg)  scale(1.04); }
   62.8%,71.2% { transform: translateX(calc(-1 * var(--split))) rotate(-11deg); }
-  74.4%,100%  { transform: ...scaleX(0); }   /* edge-on, hands off to the base ski */
+  /* edge-on → hands off to the base ski */
+  74.4%,100%  { transform: ...scaleX(0); }
 }
 ```
 
@@ -242,7 +252,8 @@ Three construction stories — Graphene, Karuba core, Topless Tech — crossfade
 
 @keyframes bs2-seq {
   0%,   26.7% { opacity: 0; transform: translateY(48px); }
-  38.4%,61.6% { opacity: 1; transform: none; }       /* hold in the middle third */
+  /* held fully visible through the middle third */
+  38.4%,61.6% { opacity: 1; transform: none; }
   70.9%,100%  { opacity: 0; transform: translateY(-36px); }
 }
 ```
@@ -326,4 +337,11 @@ A few things crystallised after wiring up a dozen of these:
 - **Named timelines + `timeline-scope` are the escape hatch** for when an element needs to react to something elsewhere in the tree, like a fixed header responding to a section far below it.
 - **Designing the fallback first is liberating.** Because the page is fully readable with zero animation, I could be aggressive with motion knowing nothing breaks for `prefers-reduced-motion` users or browsers without timeline support. The animation layer is genuinely optional.
 
-The whole thing is one stylesheet and zero JavaScript. If you want to poke at the real keyframes, it's all in [the repo](https://github.com/FrankIglesias/head-kore-93) — or [scroll the live page](https://head-kore-93.vercel.app/) and watch all twelve fire in sequence.
+## See it for yourself
+
+The previews above are deliberately stripped down — the real page is where these twelve animations earn their keep, firing in sequence against full-bleed type and product photography.
+
+- **[Scroll the live page](https://head-kore-93.vercel.app/)** — best experienced in Chrome or Firefox; Safari falls back to the static layout.
+- **[Read the source on GitHub](https://github.com/FrankIglesias/head-kore-93)** — one HTML file, one stylesheet, zero JavaScript. The real keyframes are all in `src/style.css`.
+
+If you end up building something with scroll-driven CSS, I'd love to see it.

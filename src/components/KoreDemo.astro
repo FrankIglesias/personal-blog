@@ -197,19 +197,19 @@ const { demo } = Astro.props;
     scrollbar-color: var(--line) transparent;
   }
 
+  /* px spacing only — vh refers to the window, not this 340px box */
   .kd-tall {
-    min-height: 900px;
-    padding: 2rem 1.5rem 60vh;
+    padding: 1.5rem 1.6rem;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1.25rem;
   }
 
   .kd-big {
     font-family: 'Bebas Neue', var(--font-display);
     font-size: 9rem;
     line-height: 0.8;
-    margin: 30vh 0;
+    margin: 220px 0;
     color: #1d2228;
     -webkit-text-stroke: 1px var(--line);
   }
@@ -232,9 +232,8 @@ const { demo } = Astro.props;
 
   @keyframes kd-grow { to { transform: scaleX(1); } }
 
-  /* ---- 2. color flip : timeline-scope + mix-blend-mode + view-timeline ---- */
-  /* hoist the name to the common ancestor so the preceding-sibling bar can see it */
-  .kd[data-demo='colorflip'] { scrollbar-width: thin; timeline-scope: --kdflip; }
+  /* ---- 2. color flip : mix-blend-mode driven by the box's own scroll ---- */
+  .kd[data-demo='colorflip'] { scrollbar-width: thin; }
   .kd-flipbar {
     position: sticky;
     top: 0;
@@ -248,10 +247,7 @@ const { demo } = Astro.props;
     mix-blend-mode: difference;
     color: var(--paper);
     animation: kd-flip linear both;
-    animation-timeline: --kdflip;
-  }
-  .kd-flip-track {
-    view-timeline: --kdflip block;
+    animation-timeline: scroll(nearest block);
   }
   .kd-flip-panel {
     height: 240px;
@@ -340,20 +336,24 @@ const { demo } = Astro.props;
   }
   @keyframes kd-slide { to { transform: translateX(-50%); } }
 
-  /* ---- 5. word reveal : view() + animation-range entry ---- */
-  .kd-words { gap: 0; }
+  /* ---- 5. word reveal : view() + animation-range entry (featured demo) ---- */
+  .kd[data-demo='wordreveal'] { height: 460px; }
+  .kd-words { gap: 0; padding: 1.5rem 1.6rem; }
   .kd-line {
     font-family: 'Bebas Neue', var(--font-display);
-    font-size: 2.6rem;
-    line-height: 1;
+    font-size: clamp(3.4rem, 11vw, 5.5rem);
+    line-height: 0.92;
+    letter-spacing: 0.01em;
     display: flex;
     flex-wrap: wrap;
-    gap: 0 0.5rem;
-    margin: 24vh 0 40vh;
+    gap: 0 0.6rem;
+    /* start well below the box fold so each word reveals on scroll */
+    margin: 500px 0 520px;
   }
   .kd-line .w {
+    display: inline-block;
     animation: kd-word-in linear both;
-    animation-timeline: view(nearest);
+    animation-timeline: view();
   }
   .kd-line .w1 { animation-range: entry 5% entry 45%; }
   .kd-line .w2 { animation-range: entry 15% entry 55%; }
@@ -361,51 +361,68 @@ const { demo } = Astro.props;
   .kd-line .w4 { animation-range: entry 40% entry 80%; }
   .kd-line .w5 { animation-range: entry 50% entry 90%; }
   @keyframes kd-word-in {
-    from { opacity: 0.25; transform: translateY(0.4em); }
-    to { opacity: 1; transform: none; }
+    from {
+      opacity: 0;
+      transform: translateY(1.1em) scale(0.72);
+      filter: blur(18px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
   }
 
-  /* ---- 6. spotlight sheen : mask + view() ---- */
-  .kd-spot-tall { min-height: 1000px; }
+  /* ---- 6. spotlight sheen : moving gradient + view() ----
+     subject must be SHORTER than the scroll box so it fully passes through
+     the viewport — otherwise the sweep happens while it's off-screen. */
+  .kd-spot-tall { padding-bottom: 0; }
   .kd-spot {
     position: relative;
-    width: 80px;
-    height: 360px;
-    margin: 18vh auto 40vh;
-    border-radius: 10px;
-    background: linear-gradient(150deg, #20262d, #0c0e11);
+    width: 110px;
+    height: 230px;
+    /* start below the fold, leave runway to sweep through */
+    margin: 380px auto 440px;
+    border-radius: 12px;
+    background: linear-gradient(150deg, #232a32, #0a0c0f);
     display: grid;
     place-items: end center;
     padding-bottom: 1rem;
     overflow: hidden;
+    /* named so the ::after sweep tracks the spot through the box,
+       not the ::after through the overflow:hidden spot */
+    view-timeline: --kdspot block;
   }
-  .kd-spot-label { writing-mode: vertical-rl; }
+  .kd-spot-label { writing-mode: vertical-rl; z-index: 1; }
   .kd-spot::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(
-      closest-side,
-      rgb(255 255 255 / 80%) 0%,
-      rgb(255 255 255 / 30%) 45%,
-      transparent 100%
+    background: linear-gradient(
+      155deg,
+      transparent 30%,
+      rgb(255 255 255 / 18%) 44%,
+      rgb(255 255 255 / 92%) 50%,
+      rgb(255 255 255 / 18%) 56%,
+      transparent 70%
     ) no-repeat;
-    background-size: 220% 40%;
+    background-size: 100% 260%;
+    background-position: 0 -160%;
     mix-blend-mode: screen;
     animation: kd-sheen linear both;
-    animation-timeline: view(nearest);
+    animation-timeline: --kdspot;
   }
   @keyframes kd-sheen {
-    from { background-position: 120% -30%; }
-    to { background-position: -30% 130%; }
+    from { background-position: 0 -160%; }
+    to { background-position: 0 160%; }
   }
 
   /* ---- 7. self-drawing blueprint : stroke-dashoffset + view-timeline ---- */
-  .kd-blu-tall { min-height: 1100px; }
   .kd-blu {
     width: 100%;
     max-width: 320px;
-    margin: 26vh auto 46vh;
+    /* start below the fold so the cover range inks on scroll */
+    margin: 380px auto 440px;
     overflow: visible;
     view-timeline: --kdblu block;
   }
@@ -433,10 +450,12 @@ const { demo } = Astro.props;
   @keyframes kd-fade-in { to { opacity: 1; } }
 
   /* ---- 8. pinned scrub sequence : sticky + view-timeline multi-keyframe ---- */
-  .kd[data-demo='showcase'] { height: 360px; }
+  /* named scroll-timeline on the box — descendants reference it explicitly,
+     bypassing the overflow:hidden stage that would otherwise hijack scroll(nearest) */
+  .kd[data-demo='showcase'] { height: 360px; scroll-timeline: --kdshow block; }
   .kd-show-track {
+    /* scroll runway; the stage below pins while this scrolls */
     height: 1400px;
-    view-timeline: --kdshow block;
   }
   .kd-show-stage {
     position: sticky;
@@ -487,10 +506,9 @@ const { demo } = Astro.props;
   .kd-show-hint { position: absolute; bottom: 0.8rem; }
 
   /* ---- 9. crossfade slides : sticky + opacity sequence ---- */
-  .kd[data-demo='crossfade'] { height: 320px; }
+  .kd[data-demo='crossfade'] { height: 320px; scroll-timeline: --kdcf block; }
   .kd-cf-track {
     height: 1200px;
-    view-timeline: --kdcf block;
   }
   .kd-cf-stage {
     position: sticky;
@@ -530,10 +548,9 @@ const { demo } = Astro.props;
   .kd-cf-hint { position: absolute; bottom: 0.8rem; right: 1.6rem; }
 
   /* ---- 10. horizontal traverse : sticky + translateX ---- */
-  .kd[data-demo='traverse'] { height: 320px; }
+  .kd[data-demo='traverse'] { height: 320px; scroll-timeline: --kdtrav block; }
   .kd-trav-track {
     height: 1300px;
-    view-timeline: --kdtrav block;
   }
   .kd-trav-wrap {
     position: sticky;
@@ -565,7 +582,7 @@ const { demo } = Astro.props;
   .kd-trav-hint { position: absolute; bottom: 0.8rem; left: 1.6rem; z-index: 2; }
 
   /* ---- 11. spec rows stagger : view() entry ---- */
-  .kd-rows { gap: 0.4rem; }
+  .kd-rows { gap: 1.4rem; }
   .kd-row {
     display: grid;
     grid-template-columns: 120px 1fr;
@@ -574,11 +591,12 @@ const { demo } = Astro.props;
     padding: 1rem 0;
     border-bottom: 1px solid var(--line);
     animation: kd-row-in linear both;
-    animation-timeline: view(nearest);
-    animation-range: entry 20% cover 15%;
+    animation-timeline: view();
+    animation-range: entry 0% entry 80%;
   }
-  .kd-row:first-of-type { margin-top: 26vh; }
-  .kd-row:last-of-type { margin-bottom: 40vh; }
+  /* push the first row below the fold so the stagger plays on scroll */
+  .kd-row:first-of-type { margin-top: 360px; }
+  .kd-row:last-of-type { margin-bottom: 420px; }
   .kd-row strong {
     font-family: 'Bebas Neue', var(--font-display);
     font-size: 1.5rem;
@@ -590,21 +608,23 @@ const { demo } = Astro.props;
   }
 
   /* ---- 12. cta reveal + glow : view() entry ---- */
-  .kd-cta-tall { min-height: 1000px; align-items: center; text-align: center; }
+  .kd-cta-tall { align-items: center; text-align: center; }
   .kd-cta-skis {
     width: 90px;
     height: 240px;
-    margin: 22vh auto 2rem;
+    /* start below the fold so the glow blooms on scroll */
+    margin: 360px auto 2rem;
     border-radius: 10px;
-    background: linear-gradient(160deg, var(--lime), #7d8e12);
+    /* neutral topsheet colour so the lime drop-shadow reads as the filter */
+    background: linear-gradient(160deg, #2c333c, #12161b);
     animation: kd-cta-in linear both;
-    animation-timeline: view(nearest);
+    animation-timeline: view();
     animation-range: entry 5% entry 60%;
   }
   .kd-cta-h {
     font-family: 'Bebas Neue', var(--font-display);
     font-size: 3rem;
-    margin: 0 0 40vh;
+    margin: 0 0 420px;
   }
   @keyframes kd-cta-in {
     from { opacity: 0; transform: translateY(40px); filter: drop-shadow(0 0 0 transparent); }
