@@ -33,7 +33,9 @@ const formattedDate = pubDate.toLocaleDateString('en-US', {
 <style>
   .card {
     border-bottom: .5px solid var(--color-border);
-    padding: var(--spacing-lg);
+    /* vertical padding only, so card content aligns flush-left with the
+       hero heading and the dividers — no horizontal inset */
+    padding: var(--spacing-lg) 0;
     transition: border-color 0.05s;
   }
 

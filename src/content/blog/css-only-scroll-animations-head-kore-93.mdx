@@ -1,8 +1,8 @@
 ---
 title: Twelve Scroll Animations, Zero JavaScript
-description: A teardown of head-kore-93 — a ski-marketing concept page where every motion, from the scroll progress bar to a pinned cinematic ski sequence, runs on native CSS scroll-driven timelines. Each animation is rebuilt here as a live, simplified preview you can scrub yourself.
+description: A ski marketing page I built to play with scroll animations and chase that wow effect. Every motion runs on native CSS scroll-driven timelines — no JavaScript — and I've rebuilt each one here as a live preview you can scrub yourself.
 pubDate: 2026-06-15
-tags: [CSS, Animations, Scroll-driven, Frontend, Vercel]
+tags: [CSS, Animations, Scroll-driven, Frontend]
 ---
 
 import KoreDemo from '../../components/KoreDemo.astro';
@@ -24,7 +24,7 @@ Almost everything here is built from four pieces of modern CSS. Worth pinning do
 
 The mental shift: an `@keyframes` block stops being "what happens over time" and becomes "what happens over distance." You write the same keyframes you always have; you just hand them a *timeline* that happens to be a scrollbar.
 
-> Browser support note: scroll-driven timelines are in Chromium and Firefox today; Safari is still catching up. The whole site is built so that without timeline support — and for anyone with `prefers-reduced-motion: reduce` — you get the full, readable, static page. Motion is an enhancement, never a dependency.
+> Browser support note: scroll-driven timelines are in Chromium and Firefox today; Safari is still catching up ([check current support on caniuse](https://caniuse.com/mdn-css_properties_animation-timeline)). The whole site is built so that without timeline support — and for anyone with `prefers-reduced-motion: reduce` — you get the full, readable, static page. Motion is an enhancement, never a dependency.
 
 ## 1. The scroll progress bar
 

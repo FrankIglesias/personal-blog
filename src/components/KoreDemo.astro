@@ -347,19 +347,22 @@ const { demo } = Astro.props;
     display: flex;
     flex-wrap: wrap;
     gap: 0 0.6rem;
-    /* start well below the box fold so each word reveals on scroll */
-    margin: 500px 0 520px;
+    /* start well below the box fold so each word reveals on scroll;
+       trimmed trailing space so the box isn't empty after the last word */
+    margin: 500px 0 180px;
   }
   .kd-line .w {
     display: inline-block;
     animation: kd-word-in linear both;
     animation-timeline: view();
   }
-  .kd-line .w1 { animation-range: entry 5% entry 45%; }
-  .kd-line .w2 { animation-range: entry 15% entry 55%; }
-  .kd-line .w3 { animation-range: entry 25% entry 65%; }
-  .kd-line .w4 { animation-range: entry 40% entry 80%; }
-  .kd-line .w5 { animation-range: entry 50% entry 90%; }
+  /* hold the line hidden until late, then reveal in the back third of the
+     scroll (~70%→end) so the effect feels deliberate, all done by the bottom */
+  .kd-line .w1 { animation-range: contain 12% contain 30%; }
+  .kd-line .w2 { animation-range: contain 17% contain 35%; }
+  .kd-line .w3 { animation-range: contain 22% contain 40%; }
+  .kd-line .w4 { animation-range: contain 27% contain 45%; }
+  .kd-line .w5 { animation-range: contain 32% contain 50%; }
   @keyframes kd-word-in {
     from {
       opacity: 0;
@@ -398,31 +401,34 @@ const { demo } = Astro.props;
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-      155deg,
-      transparent 30%,
-      rgb(255 255 255 / 18%) 44%,
-      rgb(255 255 255 / 92%) 50%,
-      rgb(255 255 255 / 18%) 56%,
-      transparent 70%
+    background: radial-gradient(
+      circle,
+      rgb(255 255 255 / 62%) 0%,
+      rgb(255 255 255 / 22%) 38%,
+      transparent 72%
     ) no-repeat;
-    background-size: 100% 260%;
-    background-position: 0 -160%;
+    /* square size keeps the glow round (not stretched to the tall box) */
+    background-size: 190px 190px;
+    background-position: -50px -100px;
     mix-blend-mode: screen;
+    /* soft falloff so it still reads as natural light, not a hard blob */
+    opacity: 0.95;
     animation: kd-sheen linear both;
     animation-timeline: --kdspot;
   }
+  /* round spotlight rakes diagonally: top-left → bottom-right as you scroll */
   @keyframes kd-sheen {
-    from { background-position: 0 -160%; }
-    to { background-position: 0 160%; }
+    from { background-position: -50px -100px; }
+    to { background-position: calc(100% + 50px) calc(100% + 100px); }
   }
 
   /* ---- 7. self-drawing blueprint : stroke-dashoffset + view-timeline ---- */
   .kd-blu {
     width: 100%;
     max-width: 320px;
-    /* start below the fold so the cover range inks on scroll */
-    margin: 380px auto 440px;
+    /* start below the fold so the cover range inks on scroll; just enough
+       tail for the labels (last range ends at cover 80%) to finish */
+    margin: 380px auto 290px;
     overflow: visible;
     view-timeline: --kdblu block;
   }
@@ -560,14 +566,15 @@ const { demo } = Astro.props;
   }
   .kd-trav-rail {
     display: flex;
-    width: max-content;
+    /* 4 panels, each one container-width → rail is 4× the wrap */
+    width: 400%;
     height: 100%;
     animation: kd-pan linear both;
     animation-timeline: --kdtrav;
   }
   .kd-panel {
-    width: 100%;
-    flex: 0 0 100%;
+    /* 25% of the 400%-wide rail = exactly one container width */
+    flex: 0 0 25%;
     display: grid;
     place-items: center;
     font-family: 'Bebas Neue', var(--font-display);
@@ -575,10 +582,10 @@ const { demo } = Astro.props;
     letter-spacing: 0.06em;
     border-right: 1px solid var(--line);
   }
-  /* the rail is 4 panels wide; container shows one → pan by 3 widths */
+  /* the rail is 4 panels wide; container shows one → pan by 3 of 4 = 75% */
   .kd-panel-lime { background: var(--lime); color: var(--ink); }
   .kd-panel-end { background: #14181d; }
-  @keyframes kd-pan { to { transform: translateX(-300%); } }
+  @keyframes kd-pan { to { transform: translateX(-75%); } }
   .kd-trav-hint { position: absolute; bottom: 0.8rem; left: 1.6rem; z-index: 2; }
 
   /* ---- 11. spec rows stagger : view() entry ---- */
@@ -596,7 +603,7 @@ const { demo } = Astro.props;
   }
   /* push the first row below the fold so the stagger plays on scroll */
   .kd-row:first-of-type { margin-top: 360px; }
-  .kd-row:last-of-type { margin-bottom: 420px; }
+  .kd-row:last-of-type { margin-bottom: 140px; }
   .kd-row strong {
     font-family: 'Bebas Neue', var(--font-display);
     font-size: 1.5rem;
@@ -624,7 +631,7 @@ const { demo } = Astro.props;
   .kd-cta-h {
     font-family: 'Bebas Neue', var(--font-display);
     font-size: 3rem;
-    margin: 0 0 420px;
+    margin: 0 0 140px;
   }
   @keyframes kd-cta-in {
     from { opacity: 0; transform: translateY(40px); filter: drop-shadow(0 0 0 transparent); }
